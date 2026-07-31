@@ -1,0 +1,39 @@
+import { Router } from 'express';
+import { customerAuthController } from '../controllers/customerAuth.controller.js';
+import {
+  customerSignupRules,
+  customerLoginRules,
+  otpLoginRequestRules,
+  otpLoginVerifyRules,
+  customerForgotPasswordRules,
+  customerResetPasswordRules,
+  updateCustomerProfileRules,
+  addAddressRules,
+  updateAddressRules,
+} from '../validators/customerAuth.validator.js';
+import { validate } from '../validators/index.js';
+import { verifyJWT } from '../middleware/auth.middleware.js';
+
+const router = Router();
+
+// Public Customer Authentication & OTP Login Endpoints
+router.post('/signup', customerSignupRules, validate, customerAuthController.signup);
+router.post('/login', customerLoginRules, validate, customerAuthController.login);
+router.post('/otp-login/request', otpLoginRequestRules, validate, customerAuthController.requestOtpLogin);
+router.post('/otp-login/verify', otpLoginVerifyRules, validate, customerAuthController.verifyOtpLogin);
+router.post('/forgot-password', customerForgotPasswordRules, validate, customerAuthController.forgotPassword);
+router.post('/reset-password', customerResetPasswordRules, validate, customerAuthController.resetPassword);
+router.post('/refresh-token', customerAuthController.refreshToken);
+
+// Protected Customer Endpoints (Requires JWT Access Token)
+router.post('/logout', verifyJWT, customerAuthController.logout);
+router.get('/profile', verifyJWT, customerAuthController.getProfile);
+router.put('/profile', verifyJWT, updateCustomerProfileRules, validate, customerAuthController.updateProfile);
+
+// Address CRUD Operations
+router.post('/addresses', verifyJWT, addAddressRules, validate, customerAuthController.addAddress);
+router.get('/addresses', verifyJWT, customerAuthController.getAddresses);
+router.put('/addresses/:addressId', verifyJWT, updateAddressRules, validate, customerAuthController.updateAddress);
+router.delete('/addresses/:addressId', verifyJWT, customerAuthController.deleteAddress);
+
+export default router;

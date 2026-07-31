@@ -1,0 +1,34 @@
+import { Router } from 'express';
+import authRoutes from './auth.routes.js';
+import healthRoutes from './health.routes.js';
+import superAdminRoutes from './superAdmin.routes.js';
+import cityAdminRoutes from './cityAdmin.routes.js';
+import partnerAuthRoutes from './partnerAuth.routes.js';
+import partnerDashboardRoutes from './partnerDashboard.routes.js';
+import customerAuthRoutes from './customerAuth.routes.js';
+import customerDashboardRoutes from './customerDashboard.routes.js';
+import categoryRoutes from './category.routes.js';
+import subCategoryRoutes from './subCategory.routes.js';
+import serviceRoutes from './service.routes.js';
+import bookingRoutes from './booking.routes.js';
+import autoAssignmentRoutes from './autoAssignment.routes.js';
+import paymentRoutes from './payment.routes.js';
+
+const router = Router();
+
+router.use('/health', healthRoutes);
+router.use('/auth', authRoutes);
+router.use('/super-admin', superAdminRoutes);
+router.use('/city-admin', cityAdminRoutes);
+router.use('/partner/auth', partnerAuthRoutes);
+router.use('/partner', partnerDashboardRoutes);
+router.use('/customer/auth', customerAuthRoutes);
+router.use('/customer', customerDashboardRoutes);
+router.use('/categories', categoryRoutes);
+router.use('/sub-categories', subCategoryRoutes);
+router.use('/services', serviceRoutes);
+router.use('/bookings', bookingRoutes);
+router.use('/dispatch', autoAssignmentRoutes);
+router.use('/payments', paymentRoutes);
+
+export default router;

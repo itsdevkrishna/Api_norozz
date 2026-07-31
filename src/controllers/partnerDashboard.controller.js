@@ -1,0 +1,83 @@
+import { BaseController } from './base.controller.js';
+import { partnerDashboardService } from '../services/partnerDashboard.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+
+export class PartnerDashboardController extends BaseController {
+
+  getDashboard = asyncHandler(async (req, res) => {
+    const data = await partnerDashboardService.getDashboardOverview(req.user);
+    return this.sendSuccess(res, data, 'Partner Dashboard overview retrieved successfully');
+  });
+
+  getTodayBookings = asyncHandler(async (req, res) => {
+    const bookings = await partnerDashboardService.getTodayBookings(req.user);
+    return this.sendSuccess(res, bookings, "Today's bookings retrieved successfully");
+  });
+
+  getPendingBookings = asyncHandler(async (req, res) => {
+    const bookings = await partnerDashboardService.getPendingBookings(req.user);
+    return this.sendSuccess(res, bookings, 'Pending bookings retrieved successfully');
+  });
+
+  getCompletedBookings = asyncHandler(async (req, res) => {
+    const bookings = await partnerDashboardService.getCompletedBookings(req.user);
+    return this.sendSuccess(res, bookings, 'Completed bookings retrieved successfully');
+  });
+
+  getCancelledBookings = asyncHandler(async (req, res) => {
+    const bookings = await partnerDashboardService.getCancelledBookings(req.user);
+    return this.sendSuccess(res, bookings, 'Cancelled bookings retrieved successfully');
+  });
+
+  getWallet = asyncHandler(async (req, res) => {
+    const wallet = await partnerDashboardService.getWallet(req.user);
+    return this.sendSuccess(res, wallet, 'Partner wallet balance retrieved successfully');
+  });
+
+  getEarnings = asyncHandler(async (req, res) => {
+    const earnings = await partnerDashboardService.getEarnings(req.user);
+    return this.sendSuccess(res, earnings, 'Monthly earnings retrieved successfully');
+  });
+
+  getRating = asyncHandler(async (req, res) => {
+    const rating = await partnerDashboardService.getRating(req.user);
+    return this.sendSuccess(res, rating, 'Rating metrics retrieved successfully');
+  });
+
+  getReviews = asyncHandler(async (req, res) => {
+    const reviews = await partnerDashboardService.getReviews(req.user);
+    return this.sendSuccess(res, reviews, 'Customer reviews retrieved successfully');
+  });
+
+  getProfile = asyncHandler(async (req, res) => {
+    const profile = await partnerDashboardService.getProfile(req.user);
+    return this.sendSuccess(res, profile, 'Partner profile retrieved successfully');
+  });
+
+  updateProfile = asyncHandler(async (req, res) => {
+    const updated = await partnerDashboardService.updateProfile(req.user._id, req.body);
+    return this.sendSuccess(res, updated, 'Partner profile updated successfully');
+  });
+
+  getAvailability = asyncHandler(async (req, res) => {
+    const availability = await partnerDashboardService.getAvailability(req.user);
+    return this.sendSuccess(res, availability, 'Partner availability retrieved successfully');
+  });
+
+  updateAvailability = asyncHandler(async (req, res) => {
+    const result = await partnerDashboardService.updateAvailability(req.user._id, req.body);
+    return this.sendSuccess(res, result, result.message);
+  });
+
+  getDocuments = asyncHandler(async (req, res) => {
+    const docs = await partnerDashboardService.getDocuments(req.user);
+    return this.sendSuccess(res, docs, 'Uploaded KYC documents retrieved successfully');
+  });
+
+  getNotifications = asyncHandler(async (req, res) => {
+    const notifs = await partnerDashboardService.getNotifications(req.user);
+    return this.sendSuccess(res, notifs, 'Partner notifications retrieved successfully');
+  });
+}
+
+export const partnerDashboardController = new PartnerDashboardController();
