@@ -169,9 +169,33 @@ export class CustomerAuthService {
   }
 
   async updateProfile(customerId, updateData) {
-    const updated = await userRepository.updateById(customerId, updateData);
+    const allowedFields = ['name', 'email', 'profileImage', 'city', 'state', 'country', 'address'];
+    const sanitizedData = {};
+
+    for (const field of allowedFields) {
+      if (updateData[field] !== undefined) {
+        sanitizedData[field] = updateData[field];
+      }
+    }
+
+    if (updateData.phone !== undefined) {
+      throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'Mobile number cannot be changed');
+    }
+
+    if (sanitizedData.email) {
+      const existingUser = await userRepository.findByEmail(sanitizedData.email);
+      if (existingUser && existingUser._id.toString() !== customerId.toString()) {
+        throw new ApiError(HTTP_STATUS.CONFLICT, 'An account with this email address already exists');
+      }
+    }
+
+    const updated = await userRepository.updateById(customerId, sanitizedData);
+    if (!updated) {
+      throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Customer user not found');
+    }
     const obj = updated.toObject();
     delete obj.password;
+    delete obj.refreshToken;
     return obj;
   }
 
