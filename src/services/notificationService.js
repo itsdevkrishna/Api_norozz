@@ -65,38 +65,37 @@ export class NotificationService {
   }
 
   /**
-   * Send Mobile SMS OTP (APITXT SMS Gateway API or Twilio fallback)
+   * Send Mobile SMS OTP via APITxT Service API (https://apitxt.com/api/sendOTP)
    */
   async sendSmsOtp(phoneNumber, otpCode) {
     try {
       console.log(`📱 Sending Mobile SMS OTP [${otpCode}] to ${phoneNumber}...`);
       
       const apitxtApiKey = process.env.APITXT_API_KEY;
-      const apitxtSender = process.env.APITXT_SENDER_ID || 'NOROZZ';
-      const cleanPhone = phoneNumber.replace(/\D/g, '');
-      const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+      const rawDigits = phoneNumber.replace(/\D/g, '');
+      const mobile10Digits = rawDigits.length >= 10 ? rawDigits.slice(-10) : rawDigits;
 
       if (apitxtApiKey) {
-        const smsMessage = `Your ${APP_NAME} Verification Code is: ${otpCode}. Valid for 5 minutes.`;
         try {
-          const response = await fetch('https://apitxt.com/api/sendMsg', {
+          const response = await fetch('https://apitxt.com/api/sendOTP', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
             },
             body: new URLSearchParams({
               authkey: apitxtApiKey,
-              sender: apitxtSender,
-              mobiles: formattedPhone,
-              message: smsMessage,
-              route: '4', // Transactional OTP Route
+              mobile: mobile10Digits,
+              otp: String(otpCode),
+              channel: 'sms',
+              country: '91',
             }),
           });
-          const resText = await response.text();
-          console.log(`✅ Mobile SMS OTP Sent via APITXT to ${phoneNumber}:`, resText);
+
+          const resultText = await response.text();
+          console.log(`✅ APITxT SMS API Response for [${mobile10Digits}]:`, resultText);
           return true;
         } catch (apiErr) {
-          console.error('❌ APITXT SMS Gateway Error:', apiErr);
+          console.error('❌ APITxT SMS Gateway Error:', apiErr);
         }
       }
 
