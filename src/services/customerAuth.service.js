@@ -74,7 +74,8 @@ export class CustomerAuthService {
     }
 
     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+    const otpExpirySec = Number(process.env.OTP_EXPIRY_SECONDS) || 300;
+    const expiresAt = new Date(Date.now() + otpExpirySec * 1000);
 
     await otpRepository.create({
       emailOrPhone,

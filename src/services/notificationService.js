@@ -65,18 +65,46 @@ export class NotificationService {
   }
 
   /**
-   * Send Mobile SMS OTP (Twilio integration / SMS Gateway)
+   * Send Mobile SMS OTP (APITXT SMS Gateway API or Twilio fallback)
    */
   async sendSmsOtp(phoneNumber, otpCode) {
     try {
       console.log(`📱 Sending Mobile SMS OTP [${otpCode}] to ${phoneNumber}...`);
       
+      const apitxtApiKey = process.env.APITXT_API_KEY;
+      const apitxtSender = process.env.APITXT_SENDER_ID || 'NOROZZ';
+      const cleanPhone = phoneNumber.replace(/\D/g, '');
+      const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+
+      if (apitxtApiKey) {
+        const smsMessage = `Your ${APP_NAME} Verification Code is: ${otpCode}. Valid for 5 minutes.`;
+        try {
+          const response = await fetch('https://apitxt.com/api/sendMsg', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              authkey: apitxtApiKey,
+              sender: apitxtSender,
+              mobiles: formattedPhone,
+              message: smsMessage,
+              route: '4', // Transactional OTP Route
+            }),
+          });
+          const resText = await response.text();
+          console.log(`✅ Mobile SMS OTP Sent via APITXT to ${phoneNumber}:`, resText);
+          return true;
+        } catch (apiErr) {
+          console.error('❌ APITXT SMS Gateway Error:', apiErr);
+        }
+      }
+
       const twilioSid = process.env.TWILIO_ACCOUNT_SID;
       const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
       const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
 
       if (twilioSid && twilioAuthToken && twilioPhone) {
-        // Send via Twilio API if keys provided
         const auth = Buffer.from(`${twilioSid}:${twilioAuthToken}`).toString('base64');
         await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
           method: 'POST',
@@ -87,12 +115,12 @@ export class NotificationService {
           body: new URLSearchParams({
             To: phoneNumber,
             From: twilioPhone,
-            Body: `Your ${APP_NAME} Verification Code is: ${otpCode}. Valid for 10 minutes.`,
+            Body: `Your ${APP_NAME} Verification Code is: ${otpCode}. Valid for 5 minutes.`,
           }),
         });
         console.log('✅ Mobile SMS OTP Sent via Twilio to:', phoneNumber);
       } else {
-        console.log(`ℹ️ Twilio credentials not set. Mobile OTP Code: [${otpCode}] ready for verification.`);
+        console.log(`ℹ️ SMS Gateway Ready. Mobile OTP Code: [${otpCode}] ready for verification.`);
       }
       return true;
     } catch (error) {
