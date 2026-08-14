@@ -1,0 +1,99 @@
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || 'f7f7192a95593be127d99665384a4e8e';
+const R2_ENDPOINT = process.env.R2_ENDPOINT || `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '0bbf533afd6e8463dae3f2e7a52ba31b';
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || 'af5eb271d3382d9e5a20622a5e8d7546a1b20f87d1866af49cde7707ce18471c';
+const R2_BUCKET = process.env.R2_BUCKET || 'advmenngo';
+
+const s3Client = new S3Client({
+  region: 'auto',
+  endpoint: R2_ENDPOINT,
+  credentials: {
+    accessKeyId: R2_ACCESS_KEY_ID,
+    secretAccessKey: R2_SECRET_ACCESS_KEY,
+  },
+});
+
+export class R2StorageService {
+  /**
+   * Upload Buffer or File to Cloudflare R2
+   */
+  async uploadFile(fileBuffer, fileName, mimeType = 'application/octet-stream', folder = 'uploads') {
+    try {
+      const key = `${folder}/${Date.now()}_${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      
+      const command = new PutObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: key,
+        Body: fileBuffer,
+        ContentType: mimeType,
+      });
+
+      await s3Client.send(command);
+
+      // Return public Media Proxy URL (or R2 Public Custom Domain if configured)
+      const baseMediaUrl = process.env.R2_PUBLIC_DOMAIN || `http://localhost:${process.env.PORT || 5000}/api/media`;
+      const publicUrl = `${baseMediaUrl}/${key}`;
+
+      return {
+        key,
+        url: publicUrl,
+        bucket: R2_BUCKET,
+      };
+    } catch (error) {
+      console.error('❌ Cloudflare R2 Upload Error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch object stream from Cloudflare R2
+   */
+  async getFileObject(key) {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: key,
+      });
+      return await s3Client.send(command);
+    } catch (error) {
+      console.error(`❌ Cloudflare R2 Fetch Error for key [${key}]:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Upload Base64 Image string to Cloudflare R2
+   */
+  async uploadBase64Image(base64String, folder = 'profiles') {
+    try {
+      if (!base64String || typeof base64String !== 'string') return null;
+
+      // If already an HTTP URL, return as is
+      if (base64String.startsWith('http://') || base64String.startsWith('https://')) {
+        return base64String;
+      }
+
+      const matches = base64String.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (!matches || matches.length !== 3) {
+        return base64String;
+      }
+
+      const mimeType = matches[1];
+      const buffer = Buffer.from(matches[2], 'base64');
+      const ext = mimeType.split('/')[1] || 'png';
+      const fileName = `img_${Date.now()}.${ext}`;
+
+      const res = await this.uploadFile(buffer, fileName, mimeType, folder);
+      return res.url;
+    } catch (error) {
+      console.error('❌ Cloudflare R2 Base64 Upload Error:', error);
+      return base64String;
+    }
+  }
+}
+
+export const r2StorageService = new R2StorageService();

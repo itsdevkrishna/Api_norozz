@@ -34,17 +34,14 @@ export const customerResetPasswordRules = [
 export const updateCustomerProfileRules = [
   body('name').optional().trim().notEmpty().withMessage('Name cannot be empty'),
   body('email').optional().isEmail().withMessage('Valid email address is required'),
+  body('phone').optional().trim(),
+  body('dob').optional().trim(),
+  body('gender').optional().trim(),
   body('profileImage').optional().trim(),
   body('city').optional().trim(),
   body('state').optional().trim(),
   body('country').optional().trim(),
   body('address').optional().trim(),
-  body('phone').custom((value) => {
-    if (value !== undefined) {
-      throw new Error('Mobile number cannot be changed');
-    }
-    return true;
-  }),
 ];
 
 export const addAddressRules = [

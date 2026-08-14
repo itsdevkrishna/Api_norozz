@@ -1,5 +1,7 @@
 import { userRepository } from '../repositories/user.repository.js';
 import { bookingRepository } from '../repositories/booking.repository.js';
+import { categoryRepository } from '../repositories/category.repository.js';
+import { serviceRepository } from '../repositories/service.repository.js';
 import { ApiError } from '../utils/ApiError.js';
 import { HTTP_STATUS } from '../constants/httpStatus.js';
 
@@ -26,35 +28,17 @@ export class CustomerDashboardService {
     };
   }
 
-  // 2. CATEGORIES & SERVICES
+  // 2. CATEGORIES & SERVICES (Real Database Data Created By Admin)
   async getCategories() {
-    return [
-      { id: 'cat-1', name: 'AC & Appliance Repair', icon: 'Wrench', badge: 'POPULAR' },
-      { id: 'cat-2', name: 'Full Home Deep Cleaning', icon: 'Sparkles', badge: 'TOP RATED' },
-      { id: 'cat-3', name: 'Salon for Women & Spa', icon: 'Scissors', badge: 'DEALS' },
-      { id: 'cat-4', name: 'Salon for Men & Grooming', icon: 'UserCheck', badge: 'TRENDING' },
-      { id: 'cat-5', name: 'Plumbing & Leakage Repair', icon: 'Droplets', badge: 'QUICK 30m' },
-      { id: 'cat-6', name: 'Electrician & Switchboard', icon: 'Zap', badge: 'POPULAR' },
-      { id: 'cat-7', name: 'Wall Painting & Waterproofing', icon: 'Paintbrush', badge: 'NEW' },
-      { id: 'cat-8', name: 'Pest Control & Sanitization', icon: 'ShieldCheck', badge: 'SAFE' },
-    ];
+    return await categoryRepository.findActiveCategories();
   }
 
   async getPopularServices() {
-    return [
-      { id: 'srv-1', title: 'AC Foam Jet Deep Cleaning', category: 'AC & Appliance Repair', price: 599, rating: 4.85, duration: '45 mins', reviews: '14.2k' },
-      { id: 'srv-2', title: 'Full Home Deep Cleaning 3BHK', category: 'Full Home Deep Cleaning', price: 4499, rating: 4.80, duration: '4 hrs', reviews: '6.1k' },
-      { id: 'srv-3', title: 'Elegance Facial & Spa Salon', category: 'Salon for Women & Spa', price: 1299, rating: 4.92, duration: '60 mins', reviews: '8.4k' },
-      { id: 'srv-4', title: 'Tap & Plumbing Leak Repair', category: 'Plumbing & Leakage Repair', price: 299, rating: 4.78, duration: '30 mins', reviews: '12k' },
-    ];
+    return await serviceRepository.findActiveServices();
   }
 
   async getFeaturedServices() {
-    return [
-      { id: 'srv-5', title: 'Bathroom Deep Cleaning & Sanitization', category: 'Full Home Deep Cleaning', price: 799, rating: 4.88, duration: '60 mins' },
-      { id: 'srv-6', title: 'AC Gas Top Up & Leak Inspection', category: 'AC & Appliance Repair', price: 1299, rating: 4.82, duration: '60 mins' },
-      { id: 'srv-7', title: 'Men Haircut & Beard Styling Combo', category: 'Salon for Men & Grooming', price: 499, rating: 4.90, duration: '45 mins' },
-    ];
+    return await serviceRepository.findActiveServices();
   }
 
   async getOffers() {

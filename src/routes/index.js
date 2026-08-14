@@ -13,6 +13,7 @@ import serviceRoutes from './service.routes.js';
 import bookingRoutes from './booking.routes.js';
 import autoAssignmentRoutes from './autoAssignment.routes.js';
 import paymentRoutes from './payment.routes.js';
+import mediaRoutes from './media.routes.js';
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use('/services', serviceRoutes);
 router.use('/bookings', bookingRoutes);
 router.use('/dispatch', autoAssignmentRoutes);
 router.use('/payments', paymentRoutes);
+router.use('/media', mediaRoutes);
 
 export default router;

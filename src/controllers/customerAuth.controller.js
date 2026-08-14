@@ -39,6 +39,18 @@ export class CustomerAuthController extends BaseController {
     return this.sendSuccess(res, result, 'OTP login successful');
   });
 
+  sendSecondaryOtp = asyncHandler(async (req, res) => {
+    const { emailOrPhone } = req.body;
+    const result = await customerAuthService.sendSecondaryOtp(req.user._id, emailOrPhone);
+    return this.sendSuccess(res, result, result.message);
+  });
+
+  verifySecondaryOtp = asyncHandler(async (req, res) => {
+    const { emailOrPhone, otp } = req.body;
+    const result = await customerAuthService.verifySecondaryOtp(req.user._id, emailOrPhone, otp);
+    return this.sendSuccess(res, result, result.message);
+  });
+
   forgotPassword = asyncHandler(async (req, res) => {
     const { email } = req.body;
     const result = await customerAuthService.forgotPassword(email);

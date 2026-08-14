@@ -1,4 +1,5 @@
 import { categoryRepository } from '../repositories/category.repository.js';
+import { r2StorageService } from './r2Storage.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import { HTTP_STATUS } from '../constants/httpStatus.js';
 
@@ -6,7 +7,8 @@ export class CategoryService {
 
   // Slug Generator Helper
   slugify(text) {
-    return text
+    if (!text) return '';
+    return String(text)
       .toLowerCase()
       .trim()
       .replace(/[^a-z0-9 -]/g, '')
@@ -14,18 +16,40 @@ export class CategoryService {
       .replace(/-+/g, '-');
   }
 
+  // Unique Slug Generator Helper
+  async generateUniqueSlug(text, currentId = null) {
+    let baseSlug = this.slugify(text);
+    if (!baseSlug) baseSlug = 'category';
+    let slug = baseSlug;
+    let counter = 1;
+
+    while (true) {
+      const filter = { slug };
+      if (currentId) {
+        filter._id = { $ne: currentId };
+      }
+      const existing = await categoryRepository.model.findOne(filter);
+      if (!existing) {
+        return slug;
+      }
+      slug = `${baseSlug}-${counter++}`;
+    }
+  }
+
   // 1. CREATE CATEGORY
   async createCategory(categoryData, createdById) {
-    const slug = categoryData.slug ? this.slugify(categoryData.slug) : this.slugify(categoryData.name);
-    
-    const existing = await categoryRepository.findBySlug(slug);
-    if (existing) {
-      throw new ApiError(HTTP_STATUS.CONFLICT, `Category with slug '${slug}' already exists`);
+    const baseText = categoryData.slug || categoryData.name || 'category';
+    const slug = await this.generateUniqueSlug(baseText);
+
+    let imageUrl = categoryData.image || '';
+    if (imageUrl && imageUrl.startsWith('data:image/')) {
+      imageUrl = await r2StorageService.uploadBase64Image(imageUrl, 'categories');
     }
 
     const category = await categoryRepository.create({
       ...categoryData,
       slug,
+      image: imageUrl,
       status: categoryData.status || 'active',
       createdBy: createdById,
     });
@@ -40,17 +64,9 @@ export class CategoryService {
       throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Category record not found');
     }
 
-    if (updateData.name && !updateData.slug) {
-      updateData.slug = this.slugify(updateData.name);
-    } else if (updateData.slug) {
-      updateData.slug = this.slugify(updateData.slug);
-    }
-
-    if (updateData.slug && updateData.slug !== category.slug) {
-      const existing = await categoryRepository.findBySlug(updateData.slug);
-      if (existing) {
-        throw new ApiError(HTTP_STATUS.CONFLICT, `Category with slug '${updateData.slug}' already exists`);
-      }
+    if (updateData.name || updateData.slug) {
+      const baseText = updateData.slug || updateData.name;
+      updateData.slug = await this.generateUniqueSlug(baseText, categoryId);
     }
 
     const updated = await categoryRepository.updateById(categoryId, {

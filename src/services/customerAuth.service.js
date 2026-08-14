@@ -4,6 +4,8 @@ import { verifyRefreshToken } from '../helpers/jwt.helper.js';
 import { ApiError } from '../utils/ApiError.js';
 import { HTTP_STATUS } from '../constants/httpStatus.js';
 import { ROLES } from '../constants/roles.constant.js';
+import { notificationService } from './notificationService.js';
+import { storageService } from './storage.service.js';
 
 export class CustomerAuthService {
 
@@ -62,6 +64,15 @@ export class CustomerAuthService {
 
   // 3. OTP LOGIN (REQUEST & VERIFY)
   async requestOtpLogin(emailOrPhone) {
+    const existingUser = await userRepository.findByEmailOrPhone(emailOrPhone);
+    if (existingUser && existingUser.role !== ROLES.CUSTOMER) {
+      const roleName = existingUser.role === ROLES.PARTNER ? 'Partner' : 'Admin';
+      throw new ApiError(
+        HTTP_STATUS.FORBIDDEN,
+        `This email/phone is registered as a ${roleName} account. Please use the ${roleName} Portal to log in.`
+      );
+    }
+
     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
@@ -72,6 +83,9 @@ export class CustomerAuthService {
       expiresAt,
     });
 
+    // Dispatch Email OTP via Brevo or Mobile SMS OTP
+    await notificationService.dispatchOtp(emailOrPhone, generatedOtp);
+
     return { emailOrPhone, otp: generatedOtp, message: 'OTP sent successfully for instant login' };
   }
 
@@ -81,24 +95,115 @@ export class CustomerAuthService {
       throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'Invalid or expired OTP code');
     }
 
-    let user = await userRepository.findByEmail(emailOrPhone);
+    let isNewUser = false;
+    let user = await userRepository.findByEmailOrPhone(emailOrPhone);
+    if (user && user.role !== ROLES.CUSTOMER) {
+      const roleName = user.role === ROLES.PARTNER ? 'Partner' : 'Admin';
+      throw new ApiError(
+        HTTP_STATUS.FORBIDDEN,
+        `This account is registered as a ${roleName}. Please use the ${roleName} Portal to log in.`
+      );
+    }
+
     if (!user) {
+      isNewUser = true;
       // Auto-create Customer account if new phone/email
+      const cleanId = emailOrPhone.trim();
+      const isEmail = cleanId.includes('@');
+      const generatedEmail = isEmail ? cleanId.toLowerCase() : `user_${cleanId.replace(/\D/g, '')}@norozz.com`;
+      const generatedPhone = !isEmail ? cleanId : '';
+
       user = await userRepository.create({
-        name: emailOrPhone.split('@')[0] || 'Customer User',
-        email: emailOrPhone.includes('@') ? emailOrPhone : `${emailOrPhone}@norozz.com`,
-        phone: !emailOrPhone.includes('@') ? emailOrPhone : '',
+        name: isEmail ? cleanId.split('@')[0] : `Customer ${cleanId.slice(-4)}`,
+        email: generatedEmail,
+        phone: generatedPhone,
         password: 'AutoOtpPassword123!',
         role: ROLES.CUSTOMER,
         status: 'active',
-        isEmailVerified: true,
-        isPhoneVerified: true,
+        isEmailVerified: isEmail,
+        isPhoneVerified: !isEmail,
+        isProfileCompleted: false,
       });
+    } else {
+      // Check if profile details are incomplete
+      const isPlaceholderName = !user.name || user.name.startsWith('Customer ') || user.name.startsWith('user_');
+      const isPlaceholderEmail = !user.email || (user.email.startsWith('user_') && user.email.endsWith('@norozz.com'));
+      const isMissingPhone = !user.phone;
+      const isMissingDob = !user.dob;
+      const isMissingGender = !user.gender;
+      const isEmailUnverified = !user.isEmailVerified;
+      const isPhoneUnverified = !user.isPhoneVerified;
+
+      if (!user.isProfileCompleted || isPlaceholderName || isPlaceholderEmail || isMissingPhone || isMissingDob || isMissingGender || isEmailUnverified || isPhoneUnverified) {
+        isNewUser = true;
+      }
     }
 
     await otpRepository.markAsVerified(validOtp._id);
 
-    return await this.generateTokens(user);
+    const authResult = await this.generateTokens(user);
+    return { ...authResult, isNewUser };
+  }
+
+  // 3b. SECONDARY OTP (VERIFY SECOND IDENTIFIER - PHONE FOR EMAIL USERS / EMAIL FOR PHONE USERS)
+  async sendSecondaryOtp(customerId, emailOrPhone) {
+    const cleanId = emailOrPhone.trim();
+    const isEmail = cleanId.includes('@');
+
+    if (isEmail) {
+      const existing = await userRepository.findByEmail(cleanId.toLowerCase());
+      if (existing && existing._id.toString() !== customerId.toString()) {
+        throw new ApiError(HTTP_STATUS.CONFLICT, 'This email address is already registered to another account.');
+      }
+    } else {
+      const existing = await userRepository.findByPhone(cleanId);
+      if (existing && existing._id.toString() !== customerId.toString()) {
+        throw new ApiError(HTTP_STATUS.CONFLICT, 'This mobile phone number is already registered to another account.');
+      }
+    }
+
+    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await otpRepository.create({
+      emailOrPhone: cleanId,
+      otp: generatedOtp,
+      type: 'secondaryVerify',
+      expiresAt,
+    });
+
+    await notificationService.dispatchOtp(cleanId, generatedOtp);
+    return { emailOrPhone: cleanId, otp: generatedOtp, message: `Verification OTP sent to ${cleanId}` };
+  }
+
+  async verifySecondaryOtp(customerId, emailOrPhone, otp) {
+    const cleanId = emailOrPhone.trim();
+    const isEmail = cleanId.includes('@');
+
+    const validOtp = await otpRepository.findLatestValidOtp(cleanId, 'secondaryVerify');
+    if (!validOtp || validOtp.otp !== otp) {
+      throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'Invalid or expired OTP code');
+    }
+
+    const user = await userRepository.findById(customerId);
+    if (!user) throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Customer account not found');
+
+    if (isEmail) {
+      user.email = cleanId.toLowerCase();
+      user.isEmailVerified = true;
+    } else {
+      user.phone = cleanId;
+      user.isPhoneVerified = true;
+    }
+
+    await user.save();
+    await otpRepository.markAsVerified(validOtp._id);
+
+    const obj = user.toObject();
+    delete obj.password;
+    delete obj.refreshToken;
+
+    return { message: `${isEmail ? 'Email' : 'Phone number'} verified successfully`, user: obj };
   }
 
   // 4. FORGOT & RESET PASSWORD
@@ -117,6 +222,9 @@ export class CustomerAuthService {
       type: 'resetPassword',
       expiresAt,
     });
+
+    // Send Reset Password Email via Brevo
+    await notificationService.sendEmailOtp(email, generatedOtp);
 
     return { email, otp: generatedOtp, message: 'Password reset OTP sent to registered email' };
   }
@@ -169,7 +277,7 @@ export class CustomerAuthService {
   }
 
   async updateProfile(customerId, updateData) {
-    const allowedFields = ['name', 'email', 'profileImage', 'city', 'state', 'country', 'address'];
+    const allowedFields = ['name', 'email', 'phone', 'dob', 'gender', 'profileImage', 'city', 'state', 'country', 'address', 'isProfileCompleted', 'isEmailVerified', 'isPhoneVerified'];
     const sanitizedData = {};
 
     for (const field of allowedFields) {
@@ -178,14 +286,26 @@ export class CustomerAuthService {
       }
     }
 
-    if (updateData.phone !== undefined) {
-      throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'Mobile number cannot be changed');
+    // Upload profile image to Cloudflare R2 if base64 data string is provided
+    if (sanitizedData.profileImage && sanitizedData.profileImage.startsWith('data:image')) {
+      sanitizedData.profileImage = await storageService.uploadBase64Image(sanitizedData.profileImage, 'norozz_customer_profiles');
     }
 
+    // Check duplicate email across accounts
     if (sanitizedData.email) {
-      const existingUser = await userRepository.findByEmail(sanitizedData.email);
+      const cleanEmail = sanitizedData.email.trim().toLowerCase();
+      const existingUser = await userRepository.findByEmail(cleanEmail);
       if (existingUser && existingUser._id.toString() !== customerId.toString()) {
-        throw new ApiError(HTTP_STATUS.CONFLICT, 'An account with this email address already exists');
+        throw new ApiError(HTTP_STATUS.CONFLICT, 'This email address is already linked to another account');
+      }
+    }
+
+    // Check duplicate phone across accounts
+    if (sanitizedData.phone) {
+      const cleanPhone = sanitizedData.phone.trim();
+      const existingUser = await userRepository.findByPhone(cleanPhone);
+      if (existingUser && existingUser._id.toString() !== customerId.toString()) {
+        throw new ApiError(HTTP_STATUS.CONFLICT, 'This mobile phone number is already linked to another account');
       }
     }
 

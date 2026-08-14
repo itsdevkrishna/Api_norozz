@@ -15,6 +15,26 @@ export class SubCategoryService {
       .replace(/-+/g, '-');
   }
 
+  // Unique Slug Generator Helper
+  async generateUniqueSlug(text, currentId = null) {
+    let baseSlug = this.slugify(text);
+    if (!baseSlug) baseSlug = 'subcategory';
+    let slug = baseSlug;
+    let counter = 1;
+
+    while (true) {
+      const filter = { slug };
+      if (currentId) {
+        filter._id = { $ne: currentId };
+      }
+      const existing = await subCategoryRepository.model.findOne(filter);
+      if (!existing) {
+        return slug;
+      }
+      slug = `${baseSlug}-${counter++}`;
+    }
+  }
+
   // 1. CREATE SUBCATEGORY
   async createSubCategory(subCategoryData, createdById) {
     // Check parent Category existence
@@ -23,11 +43,8 @@ export class SubCategoryService {
       throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Parent Category not found or deleted');
     }
 
-    const slug = subCategoryData.slug ? this.slugify(subCategoryData.slug) : this.slugify(subCategoryData.name);
-    const existing = await subCategoryRepository.findBySlug(slug);
-    if (existing) {
-      throw new ApiError(HTTP_STATUS.CONFLICT, `SubCategory with slug '${slug}' already exists`);
-    }
+    const baseText = subCategoryData.slug || subCategoryData.name || 'subcategory';
+    const slug = await this.generateUniqueSlug(baseText);
 
     const subCategory = await subCategoryRepository.create({
       ...subCategoryData,
@@ -53,17 +70,9 @@ export class SubCategoryService {
       }
     }
 
-    if (updateData.name && !updateData.slug) {
-      updateData.slug = this.slugify(updateData.name);
-    } else if (updateData.slug) {
-      updateData.slug = this.slugify(updateData.slug);
-    }
-
-    if (updateData.slug && updateData.slug !== subCategory.slug) {
-      const existing = await subCategoryRepository.findBySlug(updateData.slug);
-      if (existing) {
-        throw new ApiError(HTTP_STATUS.CONFLICT, `SubCategory with slug '${updateData.slug}' already exists`);
-      }
+    if (updateData.name || updateData.slug) {
+      const baseText = updateData.slug || updateData.name;
+      updateData.slug = await this.generateUniqueSlug(baseText, subCategoryId);
     }
 
     const updated = await subCategoryRepository.updateById(subCategoryId, {

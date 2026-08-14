@@ -49,6 +49,15 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    dob: {
+      type: String,
+      default: '',
+    },
+    gender: {
+      type: String,
+      enum: ['Male', 'Female', 'Other', ''],
+      default: '',
+    },
     address: {
       type: String,
       default: '',
@@ -79,6 +88,10 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
     isPhoneVerified: {
+      type: Boolean,
+      default: false,
+    },
+    isProfileCompleted: {
       type: Boolean,
       default: false,
     },

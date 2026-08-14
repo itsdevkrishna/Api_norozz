@@ -1,17 +1,16 @@
-import cloudinary from '../config/cloudinary.js';
+import { r2StorageService } from './r2Storage.service.js';
 
 export class StorageService {
   async uploadToCloudinary(fileBuffer, folder = 'norozz_uploads') {
-    return new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        { folder },
-        (error, result) => {
-          if (error) return reject(error);
-          resolve(result);
-        }
-      );
-      uploadStream.end(fileBuffer);
-    });
+    const result = await r2StorageService.uploadFile(fileBuffer, 'file', 'application/octet-stream', folder);
+    return {
+      url: result.url,
+      secure_url: result.url,
+    };
+  }
+
+  async uploadBase64Image(base64String, folder = 'norozz_profiles') {
+    return await r2StorageService.uploadBase64Image(base64String, folder);
   }
 }
 

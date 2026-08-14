@@ -29,6 +29,8 @@ router.post('/refresh-token', customerAuthController.refreshToken);
 router.post('/logout', verifyJWT, customerAuthController.logout);
 router.get('/profile', verifyJWT, customerAuthController.getProfile);
 router.put('/profile', verifyJWT, updateCustomerProfileRules, validate, customerAuthController.updateProfile);
+router.post('/secondary-otp/send', verifyJWT, customerAuthController.sendSecondaryOtp);
+router.post('/secondary-otp/verify', verifyJWT, customerAuthController.verifySecondaryOtp);
 
 // Address CRUD Operations
 router.post('/addresses', verifyJWT, addAddressRules, validate, customerAuthController.addAddress);

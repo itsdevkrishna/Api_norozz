@@ -51,6 +51,15 @@ const serviceSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    packages: [
+      {
+        title: { type: String, required: true, trim: true },
+        price: { type: Number, required: true, min: 0 },
+        description: { type: String, default: '', trim: true },
+        features: [{ type: String, trim: true }],
+        isPopular: { type: Boolean, default: false },
+      },
+    ],
     thumbnail: {
       type: String,
       default: '',

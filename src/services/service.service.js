@@ -1,6 +1,7 @@
 import { serviceRepository } from '../repositories/service.repository.js';
 import { categoryRepository } from '../repositories/category.repository.js';
 import { subCategoryRepository } from '../repositories/subCategory.repository.js';
+import { r2StorageService } from './r2Storage.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import { HTTP_STATUS } from '../constants/httpStatus.js';
 
@@ -14,6 +15,26 @@ export class ServiceService {
       .replace(/[^a-z0-9 -]/g, '')
       .replace(/\s+/g, '-')
       .replace(/-+/g, '-');
+  }
+
+  // Unique Slug Generator Helper
+  async generateUniqueSlug(text, currentId = null) {
+    let baseSlug = this.slugify(text);
+    if (!baseSlug) baseSlug = 'service';
+    let slug = baseSlug;
+    let counter = 1;
+
+    while (true) {
+      const filter = { slug };
+      if (currentId) {
+        filter._id = { $ne: currentId };
+      }
+      const existing = await serviceRepository.model.findOne(filter);
+      if (!existing) {
+        return slug;
+      }
+      slug = `${baseSlug}-${counter++}`;
+    }
   }
 
   // 1. CREATE SERVICE
@@ -30,14 +51,18 @@ export class ServiceService {
       throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Parent SubCategory not found or deleted');
     }
 
-    const slug = serviceData.slug ? this.slugify(serviceData.slug) : this.slugify(serviceData.name);
-    const existing = await serviceRepository.findBySlug(slug);
-    if (existing) {
-      throw new ApiError(HTTP_STATUS.CONFLICT, `Service with slug '${slug}' already exists`);
+    const baseText = serviceData.slug || serviceData.name || 'service';
+    const slug = await this.generateUniqueSlug(baseText);
+
+    let imageUrl = serviceData.thumbnail || serviceData.image || '';
+    if (imageUrl && imageUrl.startsWith('data:image/')) {
+      imageUrl = await r2StorageService.uploadBase64Image(imageUrl, 'services');
     }
 
     const service = await serviceRepository.create({
       ...serviceData,
+      thumbnail: imageUrl,
+      image: imageUrl,
       slug,
       status: serviceData.status || 'active',
       createdBy: createdById,
@@ -66,15 +91,9 @@ export class ServiceService {
       if (!subCat || subCat.status === 'deleted') throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Parent SubCategory not found');
     }
 
-    if (updateData.name && !updateData.slug) {
-      updateData.slug = this.slugify(updateData.name);
-    } else if (updateData.slug) {
-      updateData.slug = this.slugify(updateData.slug);
-    }
-
-    if (updateData.slug && updateData.slug !== service.slug) {
-      const existing = await serviceRepository.findBySlug(updateData.slug);
-      if (existing) throw new ApiError(HTTP_STATUS.CONFLICT, `Service with slug '${updateData.slug}' already exists`);
+    if (updateData.name || updateData.slug) {
+      const baseText = updateData.slug || updateData.name;
+      updateData.slug = await this.generateUniqueSlug(baseText, serviceId);
     }
 
     const updated = await serviceRepository.updateById(serviceId, {
