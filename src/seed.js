@@ -2,10 +2,11 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import { User } from './models/user.model.js';
 import { ROLES } from './constants/roles.constant.js';
+import { seedCatalogData } from './seedCatalog.js';
 
 dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://krishanji:krishanji@krishanji.b2r9i.mongodb.net/norozz?retryWrites=true&w=majority';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://prabhasadvmen_db_user:vwHOIYulPNOmFLdA@cluster0.5nqnjyj.mongodb.net/Norozz?appName=Norozz';
 
 async function seed() {
   try {
@@ -95,6 +96,9 @@ async function seed() {
       await customer.save();
       console.log('✅ Customer password updated to: NewCustomerPass123!');
     }
+
+    // 5. Categories, SubCategories & Services Data
+    await seedCatalogData();
 
     console.log('🎉 Seeding completed successfully!');
     process.exit(0);

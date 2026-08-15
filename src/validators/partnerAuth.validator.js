@@ -24,3 +24,45 @@ export const partnerResetPasswordRules = [
   body('otp').isLength({ min: 4, max: 6 }).withMessage('Valid 4-6 digit OTP code is required'),
   body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
 ];
+
+export const partnerOtpRequestRules = [
+  body('phone').trim().notEmpty().withMessage('Mobile phone number is required'),
+];
+
+export const partnerOtpVerifyRules = [
+  body('phone').trim().notEmpty().withMessage('Mobile phone number is required'),
+  body('otp').isLength({ min: 4, max: 6 }).withMessage('Valid 4-6 digit OTP code is required'),
+];
+
+export const updatePartnerProfileRules = [
+  body('name').optional().trim().notEmpty().withMessage('Name cannot be empty'),
+  body('email').optional().isEmail().withMessage('Valid email address is required'),
+  body('dob').optional().trim(),
+  body('gender').optional().trim(),
+  body('assignedCity').optional().trim(),
+  body('category').optional().trim(),
+];
+
+export const onboardingDocumentsRules = [
+  body('documents').optional().isObject().withMessage('Documents must be an object'),
+];
+
+export const onboardingCategoryRules = [
+  body('category').trim().notEmpty().withMessage('Service Category is required'),
+];
+
+export const onboardingSkillsRules = [
+  body('experience').optional().trim(),
+  body('skills').optional().isArray().withMessage('Skills must be an array'),
+];
+
+export const onboardingServiceAreaRules = [
+  body('workRadius').optional().isNumeric().withMessage('Work radius must be a number'),
+  body('localities').optional().isArray().withMessage('Localities must be an array'),
+];
+
+export const onboardingWorkingHoursRules = [
+  body('workingHours').optional().isArray().withMessage('Working hours schedule must be an array'),
+];
+
+

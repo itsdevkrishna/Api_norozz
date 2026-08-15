@@ -120,11 +120,47 @@ const userSchema = new mongoose.Schema(
       enum: ['pending', 'approved', 'rejected'],
       default: 'pending',
     },
+    isKycSubmitted: {
+      type: Boolean,
+      default: false,
+    },
+    experience: {
+      type: String,
+      default: '3-5 Years',
+    },
+    skills: {
+      type: [String],
+      default: [],
+    },
+    certifications: {
+      type: [String],
+      default: [],
+    },
+    workRadius: {
+      type: Number,
+      default: 8,
+    },
+    localities: {
+      type: [String],
+      default: [],
+    },
+    workingHours: [
+      {
+        day: { type: String, required: true },
+        isOpen: { type: Boolean, default: true },
+        openTime: { type: String, default: '09:00 AM' },
+        closeTime: { type: String, default: '07:00 PM' },
+      },
+    ],
     documents: {
       aadhaarDoc: { type: String, default: '' },
+      aadhaarFront: { type: String, default: '' },
+      aadhaarBack: { type: String, default: '' },
       panDoc: { type: String, default: '' },
-      gstDoc: { type: String, default: '' },
+      drivingLicenseDoc: { type: String, default: '' },
+      passportPhoto: { type: String, default: '' },
       bankPassbookDoc: { type: String, default: '' },
+      gstDoc: { type: String, default: '' },
     },
     addresses: [addressSchema],
     favoriteServices: [{ type: String, trim: true }],

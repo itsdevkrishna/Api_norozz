@@ -26,6 +26,25 @@ export class PartnerAuthController extends BaseController {
     return this.sendSuccess(res, result, 'Partner login successful');
   });
 
+  requestOtpLogin = asyncHandler(async (req, res) => {
+    const { phone } = req.body;
+    const result = await partnerAuthService.requestOtpLogin(phone);
+    return this.sendSuccess(res, result, 'OTP sent to mobile number');
+  });
+
+  verifyOtpLogin = asyncHandler(async (req, res) => {
+    const { phone, otp } = req.body;
+    const result = await partnerAuthService.verifyOtpLogin(phone, otp);
+    this.setCookie(res, result.refreshToken);
+    return this.sendSuccess(res, result, 'Partner OTP verified successfully');
+  });
+
+  updateProfile = asyncHandler(async (req, res) => {
+    const result = await partnerAuthService.updateProfile(req.user._id, req.body);
+    return this.sendSuccess(res, result, 'Partner profile updated successfully');
+  });
+
+
   logout = asyncHandler(async (req, res) => {
     res.clearCookie('refreshToken');
     return this.sendSuccess(res, null, 'Partner logged out successfully');
@@ -45,6 +64,36 @@ export class PartnerAuthController extends BaseController {
 
   uploadDocuments = asyncHandler(async (req, res) => {
     const result = await partnerAuthService.uploadDocuments(req.user._id, req.files || {});
+    return this.sendSuccess(res, result, result.message);
+  });
+
+  saveOnboardingDocuments = asyncHandler(async (req, res) => {
+    const result = await partnerAuthService.saveOnboardingDocuments(req.user._id, req.body.documents || req.body);
+    return this.sendSuccess(res, result, result.message);
+  });
+
+  saveOnboardingCategory = asyncHandler(async (req, res) => {
+    const result = await partnerAuthService.saveOnboardingCategory(req.user._id, req.body.category);
+    return this.sendSuccess(res, result, result.message);
+  });
+
+  saveOnboardingSkills = asyncHandler(async (req, res) => {
+    const result = await partnerAuthService.saveOnboardingSkills(req.user._id, req.body);
+    return this.sendSuccess(res, result, result.message);
+  });
+
+  saveOnboardingServiceArea = asyncHandler(async (req, res) => {
+    const result = await partnerAuthService.saveOnboardingServiceArea(req.user._id, req.body);
+    return this.sendSuccess(res, result, result.message);
+  });
+
+  saveOnboardingWorkingHours = asyncHandler(async (req, res) => {
+    const result = await partnerAuthService.saveOnboardingWorkingHours(req.user._id, req.body);
+    return this.sendSuccess(res, result, result.message);
+  });
+
+  submitKycSetup = asyncHandler(async (req, res) => {
+    const result = await partnerAuthService.submitKycSetup(req.user._id, req.body);
     return this.sendSuccess(res, result, result.message);
   });
 
