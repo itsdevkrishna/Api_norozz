@@ -1,8 +1,288 @@
+import { Server } from 'socket.io';
+import { userRepository } from '../repositories/user.repository.js';
+import { bookingRepository } from '../repositories/booking.repository.js';
+import { ChatMessage } from '../models/chat.model.js';
+import { ROLES } from '../constants/roles.constant.js';
+
+let io = null;
+
+// Store partner sockets: partnerId -> Set of socketIds
+const partnerSocketsMap = new Map();
+
 /**
- * Socket.io / WebSocket Server Initializer
- * @param {Object} server HTTP Server instance
+ * Initialize Socket.io Server
+ * @param {Object} httpServer Node.js HTTP Server instance
  */
-export const initSockets = (server) => {
-  console.log('Socket.io Service Ready for Real-Time Dispatch Connections');
-  // Socket event listeners can be configured here
+export const initSockets = (httpServer) => {
+  io = new Server(httpServer, {
+    cors: {
+      origin: '*',
+      methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    },
+    transports: ['websocket', 'polling'],
+  });
+
+  console.log('⚡ Socket.io Real-Time Dispatcher Server Initialized');
+
+  io.on('connection', (socket) => {
+    console.log(`🔌 Client connected to Socket.io: ${socket.id}`);
+
+    // 1. PARTNER JOIN ROOM
+    socket.on('join_partner', async (data) => {
+      try {
+        const { partnerId, category, city } = data || {};
+        if (!partnerId) return;
+
+        socket.partnerId = partnerId;
+        socket.partnerCategory = category || '';
+        socket.partnerCity = city || 'Delhi NCR';
+
+        // Join individual partner room
+        const partnerRoom = `partner_${partnerId}`;
+        socket.join(partnerRoom);
+
+        // Join Category & City Room (e.g. category_AC & Appliance Repair_Delhi NCR)
+        if (category) {
+          const categoryRoom = `category_${category.trim()}_${(city || 'Delhi NCR').trim()}`;
+          socket.join(categoryRoom);
+          console.log(`👤 Partner ${partnerId} joined category room: [${categoryRoom}]`);
+        }
+
+        // Join All Online Partners Room
+        socket.join('all_online_partners');
+
+        // Track partner socket ID
+        if (!partnerSocketsMap.has(partnerId)) {
+          partnerSocketsMap.set(partnerId, new Set());
+        }
+        partnerSocketsMap.get(partnerId).add(socket.id);
+
+        socket.emit('partner_connected', {
+          success: true,
+          message: 'Connected to real-time job dispatch network',
+          partnerId,
+        });
+      } catch (err) {
+        console.error('Error in join_partner socket handler:', err);
+      }
+    });
+
+    // 1b. JOIN BOOKING CHAT ROOM
+    socket.on('join_chat_room', (data) => {
+      try {
+        const { bookingId } = data || {};
+        if (!bookingId) return;
+
+        const chatRoom = `chat_booking_${bookingId}`;
+        socket.join(chatRoom);
+        console.log(`💬 Socket ${socket.id} joined chat room: [${chatRoom}]`);
+
+        socket.emit('chat_room_joined', { success: true, bookingId, room: chatRoom });
+      } catch (err) {
+        console.error('Error in join_chat_room socket handler:', err);
+      }
+    });
+
+    // 1c. SEND REAL-TIME CHAT MESSAGE
+    socket.on('send_chat_message', async (data) => {
+      try {
+        const { bookingId, senderId, senderName, senderRole, message } = data || {};
+        if (!bookingId || !senderId || !message) return;
+
+        const trimmedMsg = String(message).trim();
+        if (!trimmedMsg) return;
+
+        // Save message to MongoDB
+        const chatMsg = await ChatMessage.create({
+          booking: String(bookingId),
+          bookingRef: String(bookingId),
+          sender: String(senderId),
+          senderName: senderName || 'User',
+          senderRole: senderRole || 'customer',
+          message: trimmedMsg,
+          timestamp: new Date(),
+        });
+
+        const chatRoom = `chat_booking_${bookingId}`;
+        console.log(`💬 Broadcasting chat msg in [${chatRoom}] from ${senderName} (${senderRole}): ${trimmedMsg}`);
+
+        const msgPayload = {
+          _id: chatMsg._id,
+          booking: String(bookingId),
+          sender: String(senderId),
+          senderName: senderName || 'User',
+          senderRole: senderRole || 'customer',
+          message: trimmedMsg,
+          timestamp: chatMsg.timestamp,
+        };
+
+        // Broadcast to all sockets in the chat room
+        io.to(chatRoom).emit('new_chat_message', msgPayload);
+
+        // Also broadcast global chat notification event for sound & toast alerts across app
+        io.emit('new_chat_notification', msgPayload);
+      } catch (err) {
+        console.error('Error in send_chat_message socket handler:', err);
+      }
+    });
+
+    // 2. ATOMIC FIRST-COME, FIRST-SERVED JOB CLAIM VIA SOCKET
+    socket.on('claim_job', async (data) => {
+      try {
+        const { bookingId, partnerId } = data || {};
+        if (!bookingId || !partnerId) {
+          return socket.emit('claim_result', { success: false, message: 'Invalid claim data' });
+        }
+
+        const partner = await userRepository.findById(partnerId);
+        if (!partner || partner.role !== ROLES.PARTNER || partner.kycStatus !== 'approved' || !partner.isOnline) {
+          return socket.emit('claim_result', {
+            success: false,
+            message: 'Only online approved partners can claim booking requests.',
+          });
+        }
+
+        // Atomic Mongoose lock: only update if status is still Pending
+        const updatedBooking = await bookingRepository.model.findOneAndUpdate(
+          {
+            _id: bookingId,
+            status: { $in: ['Pending', 'pending'] },
+          },
+          {
+            $set: {
+              partner: partner._id,
+              status: 'Accepted',
+            },
+          },
+          { new: true }
+        ).populate('customer', 'name phone email')
+         .populate('service', 'name price duration')
+         .populate('category', 'name');
+
+        if (!updatedBooking) {
+          // Job was already claimed by another partner or cancelled
+          return socket.emit('claim_result', {
+            success: false,
+            message: '⚡ Job already claimed by another technician!',
+            bookingId,
+          });
+        }
+
+        // SUCCESS: First partner claimed the job!
+        console.log(`🎉 Job [${bookingId}] successfully claimed by Partner [${partner.name}]`);
+
+        // Notify claiming partner
+        socket.emit('claim_result', {
+          success: true,
+          message: '🎉 Congratulations! Booking successfully assigned to you.',
+          booking: updatedBooking,
+        });
+
+        // Broadcast to all other partners to dismiss incoming job offer
+        const categoryName = updatedBooking.category?.name || partner.category || '';
+        const bookingCity = updatedBooking.city || partner.assignedCity || 'Delhi NCR';
+        const categoryRoom = `category_${categoryName.trim()}_${bookingCity.trim()}`;
+
+        io.to(categoryRoom).to('all_online_partners').emit('job_claimed', {
+          bookingId,
+          claimedByPartnerId: partner._id,
+          claimedByPartnerName: partner.name,
+          message: `Booking ${updatedBooking.bookingId || bookingId} claimed by another technician.`,
+        });
+
+        // Notify customer socket if online
+        io.to(`customer_${updatedBooking.customer?._id}`).emit('partner_assigned', {
+          booking: updatedBooking,
+          partner: {
+            id: partner._id,
+            name: partner.name,
+            phone: partner.phone,
+            category: partner.category,
+          },
+        });
+      } catch (err) {
+        console.error('Error handling claim_job socket event:', err);
+        socket.emit('claim_result', { success: false, message: 'Server error claiming job request.' });
+      }
+    });
+
+    // 3. DISCONNECT HANDLER
+    socket.on('disconnect', () => {
+      console.log(`🔌 Client disconnected: ${socket.id}`);
+      if (socket.partnerId && partnerSocketsMap.has(socket.partnerId)) {
+        const socketSet = partnerSocketsMap.get(socket.partnerId);
+        socketSet.delete(socket.id);
+        if (socketSet.size === 0) {
+          partnerSocketsMap.delete(socket.partnerId);
+        }
+      }
+    });
+  });
+
+  return io;
+};
+
+/**
+ * Helper: Broadcast real-time job offer to eligible partners
+ * Filters by Category, Online status, and Work Radius / Location
+ * @param {Object} booking Populated Mongoose booking object
+ */
+export const dispatchNewJobOffer = async (booking) => {
+  if (!io) {
+    console.warn('Socket.io server not initialized yet. Skipping real-time dispatch broadcast.');
+    return;
+  }
+
+  try {
+    const categoryName = typeof booking.category === 'object' ? booking.category?.name : booking.category;
+    const bookingCity = booking.city || booking.address?.city || 'Delhi NCR';
+    const addressLine = booking.address?.addressLine || `${bookingCity} Operational Area`;
+
+    // 1. Fetch eligible online partners in database to filter by work radius / category
+    const eligiblePartners = await userRepository.find({
+      role: ROLES.PARTNER,
+      status: 'active',
+      kycStatus: 'approved',
+      isOnline: true,
+      $or: [{ assignedCity: bookingCity }, { city: bookingCity }],
+    });
+
+    console.log(`📢 Dispatching Booking [${booking.bookingId || booking._id}] to ${eligiblePartners.length} online approved partners...`);
+
+    const offerPayload = {
+      bookingId: booking._id,
+      bookingNumber: booking.bookingId || `UC-${booking._id.toString().slice(-5).toUpperCase()}`,
+      serviceTitle: booking.packageName || booking.service?.name || 'Home Service',
+      categoryName: categoryName || 'Appliance Repair',
+      customerName: booking.customer?.name || 'Customer',
+      customerPhone: booking.customer?.phone || '',
+      address: `${booking.address?.title ? booking.address.title + ': ' : ''}${addressLine}, ${bookingCity}`,
+      city: bookingCity,
+      amount: booking.amount || booking.service?.finalPrice || 599,
+      timeSlot: booking.timeSlot || 'Immediate / 10:30 AM',
+      createdAt: new Date(),
+      expirySeconds: 60,
+    };
+
+    // Broadcast to Category & City Room
+    const categoryRoom = `category_${(categoryName || '').trim()}_${bookingCity.trim()}`;
+    io.to(categoryRoom).emit('new_job_offer', offerPayload);
+
+    // Also broadcast to all_online_partners for max reach/testing
+    io.to('all_online_partners').emit('new_job_offer', offerPayload);
+
+    return offerPayload;
+  } catch (err) {
+    console.error('Error in dispatchNewJobOffer helper:', err);
+  }
+};
+
+/**
+ * Get Socket.io server instance
+ */
+export const getIO = () => {
+  if (!io) {
+    throw new Error('Socket.io has not been initialized yet!');
+  }
+  return io;
 };

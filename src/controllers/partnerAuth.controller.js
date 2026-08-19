@@ -67,6 +67,11 @@ export class PartnerAuthController extends BaseController {
     return this.sendSuccess(res, result, result.message);
   });
 
+  saveOnboardingLocation = asyncHandler(async (req, res) => {
+    const result = await partnerAuthService.saveOnboardingLocation(req.user._id, req.body);
+    return this.sendSuccess(res, result, result.message);
+  });
+
   saveOnboardingDocuments = asyncHandler(async (req, res) => {
     const result = await partnerAuthService.saveOnboardingDocuments(req.user._id, req.body.documents || req.body);
     return this.sendSuccess(res, result, result.message);

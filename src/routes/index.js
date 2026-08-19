@@ -14,6 +14,7 @@ import bookingRoutes from './booking.routes.js';
 import autoAssignmentRoutes from './autoAssignment.routes.js';
 import paymentRoutes from './payment.routes.js';
 import mediaRoutes from './media.routes.js';
+import chatRoutes from './chat.routes.js';
 
 const router = Router();
 
@@ -32,5 +33,6 @@ router.use('/bookings', bookingRoutes);
 router.use('/dispatch', autoAssignmentRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/media', mediaRoutes);
+router.use('/chat', chatRoutes);
 
 export default router;

@@ -35,6 +35,7 @@ router.put('/profile', verifyJWT, updatePartnerProfileRules, validate, partnerAu
 router.post('/kyc-submit', verifyJWT, partnerAuthController.submitKycSetup);
 
 // Step-wise Dedicated Partner Onboarding Endpoints
+router.post('/onboarding/location', verifyJWT, partnerAuthController.saveOnboardingLocation);
 router.post('/onboarding/documents', verifyJWT, onboardingDocumentsRules, validate, partnerAuthController.saveOnboardingDocuments);
 router.post('/onboarding/category', verifyJWT, onboardingCategoryRules, validate, partnerAuthController.saveOnboardingCategory);
 router.post('/onboarding/skills', verifyJWT, onboardingSkillsRules, validate, partnerAuthController.saveOnboardingSkills);
@@ -43,15 +44,19 @@ router.post('/onboarding/working-hours', verifyJWT, onboardingWorkingHoursRules,
 
 
 
-// Multi-file Upload for KYC Documents (Aadhaar, PAN, GST, Bank Passbook, Profile Image)
+// Multi-file Upload for KYC Documents (Aadhaar, PAN, GST, Bank Passbook, Profile Image, Driving License, Photo)
 router.post(
   '/upload-documents',
   verifyJWT,
   upload.fields([
     { name: 'aadhaarDoc', maxCount: 1 },
+    { name: 'aadhaarFront', maxCount: 1 },
+    { name: 'aadhaarBack', maxCount: 1 },
     { name: 'panDoc', maxCount: 1 },
     { name: 'gstDoc', maxCount: 1 },
     { name: 'bankPassbookDoc', maxCount: 1 },
+    { name: 'passportPhoto', maxCount: 1 },
+    { name: 'drivingLicenseDoc', maxCount: 1 },
     { name: 'profileImage', maxCount: 1 },
   ]),
   partnerAuthController.uploadDocuments

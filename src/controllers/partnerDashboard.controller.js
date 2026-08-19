@@ -1,8 +1,24 @@
 import { BaseController } from './base.controller.js';
 import { partnerDashboardService } from '../services/partnerDashboard.service.js';
+import { bookingService } from '../services/booking.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 export class PartnerDashboardController extends BaseController {
+
+  claimJobOffer = asyncHandler(async (req, res) => {
+    const result = await bookingService.claimJobOffer(req.params.id, req.user);
+    return this.sendSuccess(res, result, result.message);
+  });
+
+  verifyOtp = asyncHandler(async (req, res) => {
+    const result = await bookingService.verifyCompletionOtp(req.params.id, req.user, req.body.otp);
+    return this.sendSuccess(res, result, result.message);
+  });
+
+  addExtraService = asyncHandler(async (req, res) => {
+    const result = await bookingService.addExtraService(req.params.id, req.user, req.body);
+    return this.sendSuccess(res, result, result.message);
+  });
 
   getDashboard = asyncHandler(async (req, res) => {
     const data = await partnerDashboardService.getDashboardOverview(req.user);

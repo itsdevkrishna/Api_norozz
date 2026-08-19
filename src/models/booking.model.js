@@ -103,6 +103,29 @@ const bookingSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    completionOtp: {
+      type: String,
+      default: () => Math.floor(1000 + Math.random() * 9000).toString(),
+    },
+    otpVerified: {
+      type: Boolean,
+      default: false,
+    },
+    extraServices: [
+      {
+        name: { type: String, required: true },
+        price: { type: Number, required: true },
+        addedAt: { type: Date, default: Date.now },
+      },
+    ],
+    startedAt: {
+      type: Date,
+      default: null,
+    },
+    completedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

@@ -1,11 +1,11 @@
 import { body } from 'express-validator';
 
 export const partnerSignupRules = [
-  body('agencyName').trim().notEmpty().withMessage('Business / Agency Name is required'),
-  body('name').trim().notEmpty().withMessage('Partner Contact Name is required'),
+  body('name').trim().notEmpty().withMessage('Technician Full Name is required'),
   body('email').isEmail().withMessage('Valid email address is required'),
   body('phone').trim().notEmpty().withMessage('Mobile phone number is required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('agencyName').optional().trim(),
   body('category').optional().trim(),
   body('city').optional().trim(),
 ];

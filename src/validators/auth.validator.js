@@ -25,10 +25,11 @@ export const customerResetPasswordRules = [
 
 // Partner Validation Rules
 export const partnerSignupRules = [
-  body('agencyName').trim().notEmpty().withMessage('Business / Agency Name is required'),
+  body('name').optional().trim().notEmpty().withMessage('Technician Full Name cannot be empty'),
   body('email').isEmail().withMessage('Valid email address is required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('phone').trim().notEmpty().withMessage('Mobile Phone number is required'),
+  body('agencyName').optional().trim(),
   body('category').optional().trim(),
   body('city').optional().trim(),
 ];

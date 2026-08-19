@@ -1,6 +1,7 @@
 import { userRepository } from '../repositories/user.repository.js';
 import { otpRepository } from '../repositories/otp.repository.js';
 import { storageService } from './storage.service.js';
+import { r2StorageService } from './r2Storage.service.js';
 import { notificationService } from './notificationService.js';
 import { ApiError } from '../utils/ApiError.js';
 import { HTTP_STATUS } from '../constants/httpStatus.js';
@@ -58,7 +59,7 @@ export class PartnerAuthService {
 
       user = await userRepository.create({
         name: `Partner ${cleanPhone.slice(-4)}`,
-        agencyName: `Partner ${cleanPhone.slice(-4)} Services`,
+        agencyName: `Technician Partner (${cleanPhone.slice(-4)})`,
         email: placeholderEmail,
         phone: cleanPhone,
         password: 'AutoOtpPartnerPass123!',
@@ -125,7 +126,7 @@ export class PartnerAuthService {
     }
 
     if (sanitizedData.name && !sanitizedData.agencyName) {
-      sanitizedData.agencyName = `${sanitizedData.name} Services`;
+      sanitizedData.agencyName = `${sanitizedData.name} (${sanitizedData.category || partner.category || 'Service Partner'})`;
     }
 
     sanitizedData.isProfileCompleted = true;
@@ -241,47 +242,101 @@ export class PartnerAuthService {
     return { message: 'Partner password reset successfully' };
   }
 
-  // 5. UPLOAD KYC DOCUMENTS (Aadhaar, PAN, GST, Bank Passbook, Profile Image)
+  // 5. UPLOAD KYC DOCUMENTS (Aadhaar, PAN, GST, Bank Passbook, Profile Image, Driving License, Photo) TO CLOUDFLARE R2
   async uploadDocuments(partnerId, files) {
     const partner = await userRepository.findById(partnerId);
     if (!partner || partner.role !== ROLES.PARTNER) {
       throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Partner account not found');
     }
 
-    const uploadedDocs = { ...partner.documents.toObject() };
+    const uploadedDocs = { ...partner.documents?.toObject?.() || partner.documents || {} };
 
-    // Upload files to Cloudinary / Storage
+    // Upload file buffers to Cloudflare R2
     if (files.aadhaarDoc?.[0]) {
-      const res = await storageService.uploadToCloudinary(files.aadhaarDoc[0].buffer, 'norozz_kyc/aadhaar');
-      uploadedDocs.aadhaarDoc = res.secure_url || res.url || 'uploaded_aadhaar.pdf';
+      const f = files.aadhaarDoc[0];
+      const res = await r2StorageService.uploadFile(f.buffer, f.originalname, f.mimetype, 'norozz_kyc/aadhaar');
+      uploadedDocs.aadhaarDoc = res.url;
+    }
+    if (files.aadhaarFront?.[0]) {
+      const f = files.aadhaarFront[0];
+      const res = await r2StorageService.uploadFile(f.buffer, f.originalname, f.mimetype, 'norozz_kyc/aadhaar');
+      uploadedDocs.aadhaarFront = res.url;
+      uploadedDocs.aadhaarDoc = res.url;
+    }
+    if (files.aadhaarBack?.[0]) {
+      const f = files.aadhaarBack[0];
+      const res = await r2StorageService.uploadFile(f.buffer, f.originalname, f.mimetype, 'norozz_kyc/aadhaar');
+      uploadedDocs.aadhaarBack = res.url;
     }
     if (files.panDoc?.[0]) {
-      const res = await storageService.uploadToCloudinary(files.panDoc[0].buffer, 'norozz_kyc/pan');
-      uploadedDocs.panDoc = res.secure_url || res.url || 'uploaded_pan.pdf';
+      const f = files.panDoc[0];
+      const res = await r2StorageService.uploadFile(f.buffer, f.originalname, f.mimetype, 'norozz_kyc/pan');
+      uploadedDocs.panDoc = res.url;
     }
     if (files.gstDoc?.[0]) {
-      const res = await storageService.uploadToCloudinary(files.gstDoc[0].buffer, 'norozz_kyc/gst');
-      uploadedDocs.gstDoc = res.secure_url || res.url || 'uploaded_gst.pdf';
+      const f = files.gstDoc[0];
+      const res = await r2StorageService.uploadFile(f.buffer, f.originalname, f.mimetype, 'norozz_kyc/gst');
+      uploadedDocs.gstDoc = res.url;
     }
     if (files.bankPassbookDoc?.[0]) {
-      const res = await storageService.uploadToCloudinary(files.bankPassbookDoc[0].buffer, 'norozz_kyc/bank');
-      uploadedDocs.bankPassbookDoc = res.secure_url || res.url || 'uploaded_passbook.pdf';
+      const f = files.bankPassbookDoc[0];
+      const res = await r2StorageService.uploadFile(f.buffer, f.originalname, f.mimetype, 'norozz_kyc/bank');
+      uploadedDocs.bankPassbookDoc = res.url;
+    }
+    if (files.passportPhoto?.[0]) {
+      const f = files.passportPhoto[0];
+      const res = await r2StorageService.uploadFile(f.buffer, f.originalname, f.mimetype, 'norozz_kyc/photo');
+      uploadedDocs.passportPhoto = res.url;
+    }
+    if (files.drivingLicenseDoc?.[0]) {
+      const f = files.drivingLicenseDoc[0];
+      const res = await r2StorageService.uploadFile(f.buffer, f.originalname, f.mimetype, 'norozz_kyc/license');
+      uploadedDocs.drivingLicenseDoc = res.url;
     }
     if (files.profileImage?.[0]) {
-      const res = await storageService.uploadToCloudinary(files.profileImage[0].buffer, 'norozz_kyc/profile');
-      partner.profileImage = res.secure_url || res.url || 'uploaded_profile.jpg';
+      const f = files.profileImage[0];
+      const res = await r2StorageService.uploadFile(f.buffer, f.originalname, f.mimetype, 'norozz_kyc/profile');
+      partner.profileImage = res.url;
     }
 
     partner.documents = uploadedDocs;
-    partner.kycStatus = 'pending'; // Submitted for City Admin review
     await partner.save();
 
     return {
-      message: 'KYC documents uploaded successfully. Application submitted for City Admin approval.',
+      message: 'KYC documents uploaded successfully to Cloudflare R2 storage.',
       kycStatus: partner.kycStatus,
       documents: partner.documents,
       profileImage: partner.profileImage,
     };
+  }
+
+  // 6. STEP-WISE ONBOARDING METHOD 0: LOCATION ACCESS (Device GPS)
+  async saveOnboardingLocation(partnerId, { latitude, longitude, address, city, landmark }) {
+    const partner = await userRepository.findById(partnerId);
+    if (!partner || partner.role !== ROLES.PARTNER) {
+      throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Partner account not found');
+    }
+
+    if (latitude && longitude) {
+      partner.locationCoordinates = {
+        lat: Number(latitude),
+        lng: Number(longitude),
+      };
+    }
+    if (address) partner.address = address;
+    if (city) {
+      partner.assignedCity = city;
+      partner.city = city;
+    }
+    if (landmark) partner.landmark = landmark;
+
+    await partner.save();
+
+    const obj = partner.toObject();
+    delete obj.password;
+    delete obj.refreshToken;
+
+    return { message: 'Device location saved successfully', user: obj };
   }
 
   // 6. STEP-WISE ONBOARDING METHOD 1: DOCUMENTS UPLOAD

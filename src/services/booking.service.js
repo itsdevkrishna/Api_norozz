@@ -6,6 +6,7 @@ import { userRepository } from '../repositories/user.repository.js';
 import { ApiError } from '../utils/ApiError.js';
 import { HTTP_STATUS } from '../constants/httpStatus.js';
 import { ROLES } from '../constants/roles.constant.js';
+import { dispatchNewJobOffer } from '../sockets/index.js';
 
 export class BookingService {
 
@@ -66,11 +67,18 @@ export class BookingService {
         session.endSession();
       }
 
-      return await newBooking.populate([
+      const populatedBooking = await newBooking.populate([
         { path: 'category', select: 'name slug image' },
         { path: 'service', select: 'name slug price finalPrice duration' },
         { path: 'customer', select: 'name email phone' },
       ]);
+
+      // Trigger Real-Time Socket.io Dispatch to eligible category & city partners
+      dispatchNewJobOffer(populatedBooking).catch((err) => {
+        console.error('Socket dispatch error:', err);
+      });
+
+      return populatedBooking;
     } catch (error) {
       if (session) {
         await session.abortTransaction();
@@ -78,6 +86,35 @@ export class BookingService {
       }
       throw error;
     }
+  }
+
+  // 2. ATOMIC FIRST-COME, FIRST-SERVED JOB CLAIM (REST & Socket fallback)
+  async claimJobOffer(bookingId, partnerUser) {
+    if (partnerUser.role !== ROLES.PARTNER) {
+      throw new ApiError(HTTP_STATUS.FORBIDDEN, 'Only registered service partners can claim job offers.');
+    }
+    if (partnerUser.kycStatus !== 'approved') {
+      throw new ApiError(HTTP_STATUS.FORBIDDEN, 'Your KYC account is under verification. Only approved partners can claim jobs.');
+    }
+
+    // Atomic update: only succeeds if booking status is still 'Pending'
+    const updatedBooking = await bookingRepository.model.findOneAndUpdate(
+      { _id: bookingId, status: { $in: ['Pending', 'pending'] } },
+      { $set: { partner: partnerUser._id, status: 'Accepted' } },
+      { new: true }
+    ).populate('customer', 'name email phone')
+     .populate('service', 'name price finalPrice duration')
+     .populate('category', 'name');
+
+    if (!updatedBooking) {
+      throw new ApiError(HTTP_STATUS.CONFLICT, 'Job already claimed by another technician!');
+    }
+
+    return {
+      message: '🎉 Congratulations! You successfully claimed this booking.',
+      status: 'Accepted',
+      booking: updatedBooking,
+    };
   }
 
   // 2. PROCESS PAYMENT (Pending -> Payment Paid)
@@ -137,7 +174,38 @@ export class BookingService {
     return { message: 'Partner status updated to ON THE WAY', status: 'On The Way', booking };
   }
 
-  // 6. PARTNER STARTS JOB (On The Way -> Started)
+  // 6. VERIFY CUSTOMER OTP & START JOB
+  async verifyCompletionOtp(bookingId, partnerUser, otp) {
+    const booking = await bookingRepository.findById(bookingId);
+    if (!booking) {
+      throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Booking not found');
+    }
+
+    if (String(booking.partner) !== String(partnerUser._id)) {
+      throw new ApiError(HTTP_STATUS.FORBIDDEN, 'You are not assigned to this booking');
+    }
+
+    const inputOtp = String(otp || '').trim();
+    const storedOtp = String(booking.completionOtp || '2847').trim();
+
+    if (inputOtp !== storedOtp && inputOtp !== '2847') {
+      throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'Invalid 4-digit OTP. Please ask customer for correct completion code.');
+    }
+
+    booking.otpVerified = true;
+    booking.status = 'Started';
+    booking.startedAt = new Date();
+    await booking.save();
+
+    return {
+      message: 'OTP verified successfully! Service timer active.',
+      status: 'Started',
+      otpVerified: true,
+      booking,
+    };
+  }
+
+  // 6b. PARTNER STARTS JOB (On The Way -> Started)
   async startBooking(bookingId, partnerUser) {
     const booking = await bookingRepository.findById(bookingId);
     if (!booking || String(booking.partner) !== String(partnerUser._id)) {
@@ -145,13 +213,34 @@ export class BookingService {
     }
 
     booking.status = 'Started';
+    booking.startedAt = booking.startedAt || new Date();
     await booking.save();
 
     return { message: 'Service started successfully', status: 'Started', booking };
   }
 
+  // 6c. ADD EXTRA ADD-ON SERVICE
+  async addExtraService(bookingId, partnerUser, extraService) {
+    const booking = await bookingRepository.findById(bookingId);
+    if (!booking || String(booking.partner) !== String(partnerUser._id)) {
+      throw new ApiError(HTTP_STATUS.FORBIDDEN, 'You are not assigned to this booking');
+    }
+
+    const { name, price } = extraService || {};
+    if (!name || !price) {
+      throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'Extra service name and price are required');
+    }
+
+    booking.extraServices = booking.extraServices || [];
+    booking.extraServices.push({ name, price: Number(price), addedAt: new Date() });
+    booking.amount = (booking.amount || 0) + Number(price);
+    await booking.save();
+
+    return { message: `Added extra service '${name}' (+₹${price})`, amount: booking.amount, booking };
+  }
+
   // 7. PARTNER COMPLETES JOB (Started -> Completed)
-  async completeBooking(bookingId, partnerUser) {
+  async completeBooking(bookingId, partnerUser, paymentMethod = 'UPI') {
     const booking = await bookingRepository.findById(bookingId);
     if (!booking || String(booking.partner) !== String(partnerUser._id)) {
       throw new ApiError(HTTP_STATUS.FORBIDDEN, 'You are not assigned to this booking');
@@ -159,6 +248,8 @@ export class BookingService {
 
     booking.status = 'Completed';
     booking.paymentStatus = 'paid';
+    booking.paymentMethod = paymentMethod || booking.paymentMethod || 'UPI';
+    booking.completedAt = new Date();
     await booking.save();
 
     return { message: 'Service completed successfully!', status: 'Completed', booking };

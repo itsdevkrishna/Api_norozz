@@ -38,47 +38,85 @@ export class PartnerDashboardService {
     }
 
     // If Approved Partner: Fetch real booking stats
-    const partnerBookings = await bookingRepository.find({ partner: partner._id }, '', { createdAt: -1 });
-    const todaysJobs = partnerBookings.filter(b => b.status === 'assigned' || b.status === 'in_progress').length;
-    const pendingJobs = partnerBookings.filter(b => b.status === 'pending').length;
-    const completedJobs = partnerBookings.filter(b => b.status === 'completed').length;
+    const partnerBookings = await bookingRepository.model
+      .find({ partner: partner._id })
+      .populate('category', 'name slug image')
+      .populate('service', 'name slug price finalPrice duration')
+      .populate('customer', 'name email phone')
+      .sort({ createdAt: -1 });
+
+    const todaysJobs = partnerBookings.filter(b => ['Assigned', 'Accepted', 'On The Way', 'Started', 'assigned', 'accepted', 'in_progress'].includes(b.status)).length;
+    const pendingJobs = partnerBookings.filter(b => ['Pending', 'pending'].includes(b.status)).length;
+    const completedJobs = partnerBookings.filter(b => ['Completed', 'completed'].includes(b.status)).length;
 
     return {
       noticeMessage: 'Account Active & Operational',
       kycStatus: 'approved',
       isBookingUnlocked: true,
       metrics: {
-        todaysJobs: todaysJobs || 3,
-        pendingJobs: pendingJobs || 2,
-        completedJobs: completedJobs || 28,
+        todaysJobs: todaysJobs,
+        pendingJobs: pendingJobs,
+        completedJobs: completedJobs,
         walletBalance: 12450,
         monthlyEarnings: 68500,
         rating: '4.85',
-        activeWorkers: 4,
+        activeWorkers: 1,
       },
-      recentBookings: partnerBookings.slice(0, 5),
+      recentBookings: partnerBookings.slice(0, 10),
     };
   }
 
   // 2. BOOKING APIS (Protected by Approved KYC Rule)
   async getTodayBookings(partner) {
     this.checkKycApproved(partner);
-    return await bookingRepository.find({ partner: partner._id, status: { $in: ['assigned', 'in_progress'] } });
+    return await bookingRepository.model
+      .find({
+        partner: partner._id,
+        status: { $in: ['Assigned', 'Accepted', 'On The Way', 'Started', 'assigned', 'accepted', 'in_progress'] },
+      })
+      .populate('category', 'name slug image')
+      .populate('service', 'name slug price finalPrice duration')
+      .populate('customer', 'name email phone')
+      .sort({ createdAt: -1 });
   }
 
   async getPendingBookings(partner) {
     this.checkKycApproved(partner);
-    return await bookingRepository.find({ partner: partner._id, status: 'pending' });
+    return await bookingRepository.model
+      .find({
+        partner: partner._id,
+        status: { $in: ['Pending', 'pending'] },
+      })
+      .populate('category', 'name slug image')
+      .populate('service', 'name slug price finalPrice duration')
+      .populate('customer', 'name email phone')
+      .sort({ createdAt: -1 });
   }
 
   async getCompletedBookings(partner) {
     this.checkKycApproved(partner);
-    return await bookingRepository.find({ partner: partner._id, status: 'completed' });
+    return await bookingRepository.model
+      .find({
+        partner: partner._id,
+        status: { $in: ['Completed', 'completed'] },
+      })
+      .populate('category', 'name slug image')
+      .populate('service', 'name slug price finalPrice duration')
+      .populate('customer', 'name email phone')
+      .sort({ createdAt: -1 });
   }
 
   async getCancelledBookings(partner) {
     this.checkKycApproved(partner);
-    return await bookingRepository.find({ partner: partner._id, status: 'cancelled' });
+    return await bookingRepository.model
+      .find({
+        partner: partner._id,
+        status: { $in: ['Cancelled', 'Refunded', 'cancelled'] },
+      })
+      .populate('category', 'name slug image')
+      .populate('service', 'name slug price finalPrice duration')
+      .populate('customer', 'name email phone')
+      .sort({ createdAt: -1 });
   }
 
   // 3. WALLET & EARNINGS
@@ -157,10 +195,15 @@ export class PartnerDashboardService {
   }
 
   async updateAvailability(partnerId, { isOnline, workingHours }) {
+    const updateData = {};
+    if (isOnline !== undefined) updateData.isOnline = Boolean(isOnline);
+    if (workingHours) updateData.workingHours = workingHours;
+
+    const updatedUser = await userRepository.updateById(partnerId, updateData);
     return {
-      message: 'Availability and working hours updated successfully',
-      isOnline: isOnline !== undefined ? isOnline : true,
-      workingHours: workingHours || '09:00 AM - 08:00 PM',
+      message: `Technician status updated to ${updatedUser?.isOnline ? 'ONLINE' : 'OFFLINE'}`,
+      isOnline: updatedUser?.isOnline ?? isOnline,
+      workingHours: updatedUser?.workingHours || '09:00 AM - 08:00 PM',
     };
   }
 
