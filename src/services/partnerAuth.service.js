@@ -392,7 +392,11 @@ export class PartnerAuthService {
     }
 
     if (experience) partner.experience = experience;
-    if (Array.isArray(skills)) partner.skills = skills;
+    if (Array.isArray(skills)) {
+      partner.skills = skills.filter(
+        (s) => (typeof s === 'string' && Boolean(s.match(/^[0-9a-fA-F]{24}$/))) || (s && s._id)
+      );
+    }
     if (Array.isArray(certifications)) partner.certifications = certifications;
 
     await partner.save();

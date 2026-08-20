@@ -2,11 +2,11 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3
 import dotenv from 'dotenv';
 dotenv.config();
 
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || 'f7f7192a95593be127d99665384a4e8e';
-const R2_ENDPOINT = process.env.R2_ENDPOINT || `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '0bbf533afd6e8463dae3f2e7a52ba31b';
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || 'af5eb271d3382d9e5a20622a5e8d7546a1b20f87d1866af49cde7707ce18471c';
-const R2_BUCKET = process.env.R2_BUCKET || 'advmenngo';
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
+const R2_ENDPOINT = process.env.R2_ENDPOINT || (R2_ACCOUNT_ID ? `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com` : '');
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+const R2_BUCKET = process.env.R2_BUCKET;
 
 const s3Client = new S3Client({
   region: 'auto',
@@ -23,6 +23,9 @@ export class R2StorageService {
    */
   async uploadFile(fileBuffer, fileName, mimeType = 'application/octet-stream', folder = 'uploads') {
     try {
+      if (!R2_BUCKET || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
+        throw new Error('Cloudflare R2 storage credentials are not properly configured in environment variables.');
+      }
       const key = `${folder}/${Date.now()}_${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       
       const command = new PutObjectCommand({

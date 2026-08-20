@@ -16,6 +16,7 @@ const router = Router();
 // CUSTOMER & PUBLIC ROUTES (Active Categories Only)
 // =====================================
 router.get('/', categoryController.getPublicCategories);
+router.get('/skills', categoryController.getSkillsForCategories);
 router.get('/slug/:slug', categoryController.getCategoryBySlug);
 
 // =====================================

@@ -6,7 +6,11 @@ import { seedCatalogData } from './seedCatalog.js';
 
 dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://prabhasadvmen_db_user:vwHOIYulPNOmFLdA@cluster0.5nqnjyj.mongodb.net/Norozz?appName=Norozz';
+const MONGODB_URI = process.env.MONGODB_URI;
+if (!MONGODB_URI) {
+  console.error('❌ MONGODB_URI environment variable is missing. Aborting seed.');
+  process.exit(1);
+}
 
 async function seed() {
   try {

@@ -13,16 +13,17 @@ import {
 } from '../validators/customerAuth.validator.js';
 import { validate } from '../validators/index.js';
 import { verifyJWT } from '../middleware/auth.middleware.js';
+import { otpAuthRateLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = Router();
 
-// Public Customer Authentication & OTP Login Endpoints
-router.post('/signup', customerSignupRules, validate, customerAuthController.signup);
-router.post('/login', customerLoginRules, validate, customerAuthController.login);
-router.post('/otp-login/request', otpLoginRequestRules, validate, customerAuthController.requestOtpLogin);
-router.post('/otp-login/verify', otpLoginVerifyRules, validate, customerAuthController.verifyOtpLogin);
-router.post('/forgot-password', customerForgotPasswordRules, validate, customerAuthController.forgotPassword);
-router.post('/reset-password', customerResetPasswordRules, validate, customerAuthController.resetPassword);
+// Public Customer Authentication & OTP Login Endpoints (Rate Limited)
+router.post('/signup', otpAuthRateLimiter, customerSignupRules, validate, customerAuthController.signup);
+router.post('/login', otpAuthRateLimiter, customerLoginRules, validate, customerAuthController.login);
+router.post('/otp-login/request', otpAuthRateLimiter, otpLoginRequestRules, validate, customerAuthController.requestOtpLogin);
+router.post('/otp-login/verify', otpAuthRateLimiter, otpLoginVerifyRules, validate, customerAuthController.verifyOtpLogin);
+router.post('/forgot-password', otpAuthRateLimiter, customerForgotPasswordRules, validate, customerAuthController.forgotPassword);
+router.post('/reset-password', otpAuthRateLimiter, customerResetPasswordRules, validate, customerAuthController.resetPassword);
 router.post('/refresh-token', customerAuthController.refreshToken);
 
 // Protected Customer Endpoints (Requires JWT Access Token)

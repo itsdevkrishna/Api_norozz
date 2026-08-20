@@ -15,6 +15,7 @@ import autoAssignmentRoutes from './autoAssignment.routes.js';
 import paymentRoutes from './payment.routes.js';
 import mediaRoutes from './media.routes.js';
 import chatRoutes from './chat.routes.js';
+import skillRoutes from './skill.routes.js';
 
 const router = Router();
 
@@ -27,6 +28,7 @@ router.use('/partner', partnerDashboardRoutes);
 router.use('/customer/auth', customerAuthRoutes);
 router.use('/customer', customerDashboardRoutes);
 router.use('/categories', categoryRoutes);
+router.use('/skills', skillRoutes);
 router.use('/sub-categories', subCategoryRoutes);
 router.use('/services', serviceRoutes);
 router.use('/bookings', bookingRoutes);

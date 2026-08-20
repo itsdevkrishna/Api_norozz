@@ -10,10 +10,14 @@ import { errorHandler } from './middleware/error.middleware.js';
 import { ApiError } from './utils/ApiError.js';
 import { HTTP_STATUS } from './constants/httpStatus.js';
 
+import { generalApiRateLimiter } from './middleware/rateLimiter.middleware.js';
+import { sanitizeInput } from './middleware/sanitize.middleware.js';
+
 const app = express();
 
-// Security Middlewares
+// Security Middlewares & Rate Limiting
 app.use(helmet());
+app.use(generalApiRateLimiter);
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
@@ -26,9 +30,10 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
-// Request Parsers
+// Request Parsers & Sanitizer
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(sanitizeInput);
 app.use(cookieParser());
 app.use(express.static('public'));
 

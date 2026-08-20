@@ -4,9 +4,9 @@ import { v2 as cloudinary } from 'cloudinary';
  * Configure Cloudinary SDK credentials
  */
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'norozz_cloud',
-  api_key: process.env.CLOUDINARY_API_KEY || '1234567890',
-  api_secret: process.env.CLOUDINARY_API_SECRET || 'secret',
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
 export default cloudinary;

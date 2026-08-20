@@ -134,10 +134,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '3-5 Years',
     },
-    skills: {
-      type: [String],
-      default: [],
-    },
+    skills: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Skill',
+      },
+    ],
     certifications: {
       type: [String],
       default: [],
@@ -191,6 +193,20 @@ const userSchema = new mongoose.Schema(
 );
 
 /**
+ * Pre-Validate Middleware to automatically filter out non-ObjectId skill strings
+ */
+userSchema.pre('validate', function (next) {
+  if (Array.isArray(this.skills)) {
+    this.skills = this.skills.filter(
+      (s) =>
+        (typeof s === 'string' && Boolean(s.match(/^[0-9a-fA-F]{24}$/))) ||
+        (s && (s._id || s instanceof mongoose.Types.ObjectId))
+    );
+  }
+  next();
+});
+
+/**
  * Pre-Save Middleware to automatically hash password using bcryptjs
  */
 userSchema.pre('save', async function (next) {
@@ -211,6 +227,9 @@ userSchema.methods.isPasswordCorrect = async function (candidatePassword) {
  * Instance Method: Generate JWT Access Token
  */
 userSchema.methods.generateAccessToken = function () {
+  if (!process.env.ACCESS_TOKEN_SECRET) {
+    throw new Error('ACCESS_TOKEN_SECRET environment variable is missing.');
+  }
   return jwt.sign(
     {
       id: this._id,
@@ -219,7 +238,7 @@ userSchema.methods.generateAccessToken = function () {
       name: this.name,
       kycStatus: this.kycStatus,
     },
-    process.env.ACCESS_TOKEN_SECRET || 'norozz_access_secret_key_12345',
+    process.env.ACCESS_TOKEN_SECRET,
     {
       expiresIn: process.env.ACCESS_TOKEN_EXPIRY || '1d',
     }
@@ -230,11 +249,14 @@ userSchema.methods.generateAccessToken = function () {
  * Instance Method: Generate JWT Refresh Token
  */
 userSchema.methods.generateRefreshToken = function () {
+  if (!process.env.REFRESH_TOKEN_SECRET) {
+    throw new Error('REFRESH_TOKEN_SECRET environment variable is missing.');
+  }
   return jwt.sign(
     {
       id: this._id,
     },
-    process.env.REFRESH_TOKEN_SECRET || 'norozz_refresh_secret_key_67890',
+    process.env.REFRESH_TOKEN_SECRET,
     {
       expiresIn: process.env.REFRESH_TOKEN_EXPIRY || '7d',
     }

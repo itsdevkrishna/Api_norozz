@@ -17,16 +17,17 @@ import {
 import { validate } from '../validators/index.js';
 import { verifyJWT } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/upload.middleware.js';
+import { otpAuthRateLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = Router();
 
-// Public Authentication Endpoints
-router.post('/signup', partnerSignupRules, validate, partnerAuthController.signup);
-router.post('/login', partnerLoginRules, validate, partnerAuthController.login);
-router.post('/otp/request', partnerOtpRequestRules, validate, partnerAuthController.requestOtpLogin);
-router.post('/otp/verify', partnerOtpVerifyRules, validate, partnerAuthController.verifyOtpLogin);
-router.post('/forgot-password', partnerForgotPasswordRules, validate, partnerAuthController.forgotPassword);
-router.post('/reset-password', partnerResetPasswordRules, validate, partnerAuthController.resetPassword);
+// Public Authentication Endpoints (Rate Limited)
+router.post('/signup', otpAuthRateLimiter, partnerSignupRules, validate, partnerAuthController.signup);
+router.post('/login', otpAuthRateLimiter, partnerLoginRules, validate, partnerAuthController.login);
+router.post('/otp/request', otpAuthRateLimiter, partnerOtpRequestRules, validate, partnerAuthController.requestOtpLogin);
+router.post('/otp/verify', otpAuthRateLimiter, partnerOtpVerifyRules, validate, partnerAuthController.verifyOtpLogin);
+router.post('/forgot-password', otpAuthRateLimiter, partnerForgotPasswordRules, validate, partnerAuthController.forgotPassword);
+router.post('/reset-password', otpAuthRateLimiter, partnerResetPasswordRules, validate, partnerAuthController.resetPassword);
 
 // Protected Partner Endpoints (Requires JWT Access Token)
 router.post('/logout', verifyJWT, partnerAuthController.logout);

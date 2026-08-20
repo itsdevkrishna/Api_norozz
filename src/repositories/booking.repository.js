@@ -28,7 +28,7 @@ export class BookingRepository extends BaseRepository {
       { $match: { status: 'completed' } },
       { $group: { _id: null, totalRevenue: { $sum: '$amount' } } },
     ]);
-    return result[0]?.totalRevenue || 12480000; // Default fallback GMV
+    return result[0]?.totalRevenue || 0;
   }
 }
 

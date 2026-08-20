@@ -9,6 +9,7 @@ export const createCategoryRules = [
   body('seoTitle').optional().trim(),
   body('seoDescription').optional().trim(),
   body('seoKeywords').optional().isArray().withMessage('SEO Keywords must be an array of strings'),
+  body('skills').optional().isArray().withMessage('Skills must be an array of strings'),
 ];
 
 export const updateCategoryRules = [
@@ -20,6 +21,7 @@ export const updateCategoryRules = [
   body('seoTitle').optional().trim(),
   body('seoDescription').optional().trim(),
   body('seoKeywords').optional().isArray().withMessage('SEO Keywords must be an array of strings'),
+  body('skills').optional().isArray().withMessage('Skills must be an array of strings'),
 ];
 
 export const updateCategoryStatusRules = [

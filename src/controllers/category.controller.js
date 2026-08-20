@@ -44,6 +44,12 @@ export class CategoryController extends BaseController {
     const category = await categoryService.getCategoryBySlug(req.params.slug);
     return this.sendSuccess(res, category, 'Category details retrieved successfully');
   });
+
+  getSkillsForCategories = asyncHandler(async (req, res) => {
+    const categoriesParam = req.query.categories || req.query.categoryIds || req.query.category;
+    const skills = await categoryService.getSkillsForCategories(categoriesParam);
+    return this.sendSuccess(res, skills, 'Category skills retrieved successfully');
+  });
 }
 
 export const categoryController = new CategoryController();

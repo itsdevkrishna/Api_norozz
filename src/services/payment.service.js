@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { paymentRepository } from '../repositories/payment.repository.js';
 import { bookingRepository } from '../repositories/booking.repository.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -51,6 +52,28 @@ export class PaymentService {
     const payment = await paymentRepository.model.findOne({ transactionId });
     if (!payment) {
       throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Payment transaction record not found');
+    }
+
+    const razorpaySecret = process.env.RAZORPAY_KEY_SECRET;
+
+    // In production or when Razorpay secret is set, verify HMAC SHA-256 signature strictly
+    if (razorpaySecret) {
+      if (!paymentId || !signature) {
+        throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'Payment ID and Razorpay signature are required');
+      }
+
+      const generatedSignature = crypto
+        .createHmac('sha256', razorpaySecret)
+        .update(`${payment.orderId}|${paymentId}`)
+        .digest('hex');
+
+      if (generatedSignature !== signature) {
+        throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'Invalid Razorpay payment signature');
+      }
+    } else if (process.env.NODE_ENV === 'production') {
+      throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, 'Payment gateway key secret not configured on server');
+    } else {
+      console.warn('⚠️ WARNING: RAZORPAY_KEY_SECRET is not set. Signature check skipped in development mode.');
     }
 
     payment.paymentId = paymentId || 'pay_simulated_' + Math.floor(100000 + Math.random() * 900000);

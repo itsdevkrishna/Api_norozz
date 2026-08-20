@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { validateEnv } from './config/env.config.js';
 import app from './app.js';
 import { initDatabase } from './database/index.js';
 import { initSockets } from './sockets/index.js';
@@ -21,6 +22,7 @@ process.on('uncaughtException', (err) => {
 
 // Initialize Database & Server Startup
 const startServer = async () => {
+  validateEnv();
   await initDatabase();
 
   const server = app.listen(PORT, () => {

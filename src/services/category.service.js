@@ -1,4 +1,5 @@
 import { categoryRepository } from '../repositories/category.repository.js';
+import { skillRepository } from '../repositories/skill.repository.js';
 import { r2StorageService } from './r2Storage.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import { HTTP_STATUS } from '../constants/httpStatus.js';
@@ -167,6 +168,38 @@ export class CategoryService {
       throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Category not found or inactive');
     }
     return category;
+  }
+
+  // 9. GET DYNAMIC SKILLS FOR CATEGORIES (Queries dedicated Skill collection)
+  async getSkillsForCategories(categoryIdentifiers = []) {
+    let idsOrNames = [];
+    if (typeof categoryIdentifiers === 'string') {
+      idsOrNames = categoryIdentifiers.split(',').map((s) => s.trim()).filter(Boolean);
+    } else if (Array.isArray(categoryIdentifiers)) {
+      idsOrNames = categoryIdentifiers;
+    }
+
+    const categoryFilter = { status: { $ne: 'deleted' } };
+    if (idsOrNames.length > 0) {
+      const validObjectIds = idsOrNames.filter((i) => typeof i === 'string' && i.match(/^[0-9a-fA-F]{24}$/));
+      categoryFilter.$or = [
+        { name: { $in: idsOrNames } },
+        { slug: { $in: idsOrNames } },
+      ];
+      if (validObjectIds.length > 0) {
+        categoryFilter.$or.push({ _id: { $in: validObjectIds } });
+      }
+    }
+
+    const categories = await categoryRepository.find(categoryFilter);
+    const categoryIds = categories.map((c) => c._id);
+
+    if (categoryIds.length === 0) {
+      return [];
+    }
+
+    const skills = await skillRepository.findByCategories(categoryIds);
+    return skills;
   }
 }
 

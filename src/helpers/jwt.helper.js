@@ -6,9 +6,12 @@ import jwt from 'jsonwebtoken';
  * @returns {String} JWT Access Token
  */
 export const generateAccessToken = (payload) => {
+  if (!process.env.ACCESS_TOKEN_SECRET) {
+    throw new Error('ACCESS_TOKEN_SECRET environment variable is missing.');
+  }
   return jwt.sign(
     payload,
-    process.env.ACCESS_TOKEN_SECRET || 'norozz_access_secret_key_12345',
+    process.env.ACCESS_TOKEN_SECRET,
     { expiresIn: process.env.ACCESS_TOKEN_EXPIRY || '1d' }
   );
 };
@@ -19,9 +22,12 @@ export const generateAccessToken = (payload) => {
  * @returns {String} JWT Refresh Token
  */
 export const generateRefreshToken = (payload) => {
+  if (!process.env.REFRESH_TOKEN_SECRET) {
+    throw new Error('REFRESH_TOKEN_SECRET environment variable is missing.');
+  }
   return jwt.sign(
     payload,
-    process.env.REFRESH_TOKEN_SECRET || 'norozz_refresh_secret_key_67890',
+    process.env.REFRESH_TOKEN_SECRET,
     { expiresIn: process.env.REFRESH_TOKEN_EXPIRY || '7d' }
   );
 };
@@ -32,9 +38,12 @@ export const generateRefreshToken = (payload) => {
  * @returns {Object} Decoded Payload
  */
 export const verifyAccessToken = (token) => {
+  if (!process.env.ACCESS_TOKEN_SECRET) {
+    throw new Error('ACCESS_TOKEN_SECRET environment variable is missing.');
+  }
   return jwt.verify(
     token,
-    process.env.ACCESS_TOKEN_SECRET || 'norozz_access_secret_key_12345'
+    process.env.ACCESS_TOKEN_SECRET
   );
 };
 
@@ -44,8 +53,11 @@ export const verifyAccessToken = (token) => {
  * @returns {Object} Decoded Payload
  */
 export const verifyRefreshToken = (token) => {
+  if (!process.env.REFRESH_TOKEN_SECRET) {
+    throw new Error('REFRESH_TOKEN_SECRET environment variable is missing.');
+  }
   return jwt.verify(
     token,
-    process.env.REFRESH_TOKEN_SECRET || 'norozz_refresh_secret_key_67890'
+    process.env.REFRESH_TOKEN_SECRET
   );
 };
