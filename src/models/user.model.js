@@ -115,6 +115,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    categories: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Category',
+      },
+    ],
     kycStatus: {
       type: String,
       enum: ['pending', 'approved', 'rejected'],

@@ -360,21 +360,28 @@ export class PartnerAuthService {
     return { message: 'Documents saved successfully', user: obj };
   }
 
-  // 6. STEP-WISE ONBOARDING METHOD 2: CATEGORY SELECTION
-  async saveOnboardingCategory(partnerId, category) {
+  // 6. STEP-WISE ONBOARDING METHOD 2: CATEGORY SELECTION (categories array of ObjectIds)
+  async saveOnboardingCategory(partnerId, payload) {
     const partner = await userRepository.findById(partnerId);
     if (!partner || partner.role !== ROLES.PARTNER) {
       throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Partner account not found');
     }
 
-    partner.category = category;
+    const rawCategories = payload?.categories || payload;
+    const categoriesArray = Array.isArray(rawCategories) ? rawCategories : [rawCategories];
+
+    partner.categories = categoriesArray;
+    if (categoriesArray.length > 0) {
+      partner.category = String(categoriesArray[0]);
+    }
+
     await partner.save();
 
     const obj = partner.toObject();
     delete obj.password;
     delete obj.refreshToken;
 
-    return { message: 'Category selected successfully', user: obj };
+    return { message: 'Category IDs saved successfully', user: obj };
   }
 
   // 6. STEP-WISE ONBOARDING METHOD 3: SKILLS & EXPERIENCE

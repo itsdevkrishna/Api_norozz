@@ -48,7 +48,7 @@ export const onboardingDocumentsRules = [
 ];
 
 export const onboardingCategoryRules = [
-  body('category').trim().notEmpty().withMessage('Service Category is required'),
+  body('categories').isArray({ min: 1 }).withMessage('categories array with at least 1 Category ID is required'),
 ];
 
 export const onboardingSkillsRules = [

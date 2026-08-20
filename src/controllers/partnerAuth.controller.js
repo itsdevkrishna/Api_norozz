@@ -78,7 +78,7 @@ export class PartnerAuthController extends BaseController {
   });
 
   saveOnboardingCategory = asyncHandler(async (req, res) => {
-    const result = await partnerAuthService.saveOnboardingCategory(req.user._id, req.body.category);
+    const result = await partnerAuthService.saveOnboardingCategory(req.user._id, req.body);
     return this.sendSuccess(res, result, result.message);
   });
 
