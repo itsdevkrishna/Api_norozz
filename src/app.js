@@ -15,6 +15,9 @@ import { sanitizeInput } from './middleware/sanitize.middleware.js';
 
 const app = express();
 
+// Trust reverse proxy (Nginx, AWS, Cloudflare, Heroku) to correctly track client IP
+app.set('trust proxy', 1);
+
 // Security Middlewares & Rate Limiting
 app.use(helmet());
 app.use(generalApiRateLimiter);
