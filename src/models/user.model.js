@@ -17,17 +17,23 @@ const addressSchema = new mongoose.Schema(
 
 const userSchema = new mongoose.Schema(
   {
+    userId: {
+      type: String,
+      default: '',
+      trim: true,
+      index: true,
+    },
     name: {
       type: String,
-      required: [true, 'Full Name is required'],
+      default: '',
       trim: true,
     },
     email: {
       type: String,
-      required: [true, 'Email is required'],
-      unique: true,
+      default: undefined,
       lowercase: true,
       trim: true,
+      sparse: true,
       index: true,
     },
     phone: {
@@ -64,11 +70,11 @@ const userSchema = new mongoose.Schema(
     },
     city: {
       type: String,
-      default: 'Delhi NCR',
+      default: '',
     },
     assignedCity: {
       type: String,
-      default: 'Delhi NCR',
+      default: '',
     },
     state: {
       type: String,
@@ -92,6 +98,30 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
     isProfileCompleted: {
+      type: Boolean,
+      default: false,
+    },
+    isLocationSaved: {
+      type: Boolean,
+      default: false,
+    },
+    isDocumentsUploaded: {
+      type: Boolean,
+      default: false,
+    },
+    isCategorySelected: {
+      type: Boolean,
+      default: false,
+    },
+    isSkillsUpdated: {
+      type: Boolean,
+      default: false,
+    },
+    isServiceAreaSet: {
+      type: Boolean,
+      default: false,
+    },
+    isWorkingHoursSet: {
       type: Boolean,
       default: false,
     },
@@ -233,9 +263,10 @@ userSchema.methods.generateAccessToken = function () {
   return jwt.sign(
     {
       id: this._id,
-      email: this.email,
+      userId: this.userId || '',
+      email: this.email || '',
       role: this.role,
-      name: this.name,
+      name: this.name || '',
       kycStatus: this.kycStatus,
     },
     process.env.ACCESS_TOKEN_SECRET,

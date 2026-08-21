@@ -1,3 +1,5 @@
+import { User } from '../models/user.model.js';
+import { City } from '../models/city.model.js';
 import { userRepository } from '../repositories/user.repository.js';
 import { bookingRepository } from '../repositories/booking.repository.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -5,6 +7,31 @@ import { HTTP_STATUS } from '../constants/httpStatus.js';
 import { ROLES } from '../constants/roles.constant.js';
 
 export class SuperAdminService {
+
+  // Helper to build city map and populate city names
+  async populateCityNames(userList) {
+    if (!Array.isArray(userList) || userList.length === 0) return userList;
+    const cities = await City.find({}).lean();
+    const citiesMap = {};
+    cities.forEach((c) => {
+      citiesMap[String(c._id)] = c.name;
+    });
+
+    return userList.map((u) => {
+      const userObj = typeof u.toObject === 'function' ? u.toObject() : { ...u };
+      delete userObj.password;
+      delete userObj.refreshToken;
+
+      let rawCity = userObj.assignedCity || userObj.city || '';
+      if (typeof rawCity === 'object' && rawCity?.name) rawCity = rawCity.name;
+      if (typeof rawCity === 'string' && citiesMap[rawCity]) {
+        rawCity = citiesMap[rawCity];
+      }
+      userObj.assignedCity = rawCity || 'Delhi NCR';
+      userObj.city = rawCity || 'Delhi NCR';
+      return userObj;
+    });
+  }
 
   // 1. DASHBOARD ANALYTICS & STATS
   async getDashboardStats() {
@@ -19,6 +46,9 @@ export class SuperAdminService {
     const recentPartners = await userRepository.find({ role: ROLES.PARTNER }, '-password', { createdAt: -1 });
     const recentCustomers = await userRepository.find({ role: ROLES.CUSTOMER }, '-password', { createdAt: -1 });
 
+    const populatedPartners = await this.populateCityNames(recentPartners);
+    const populatedCustomers = await this.populateCityNames(recentCustomers);
+
     return {
       overview: {
         grossRevenue,
@@ -29,14 +59,15 @@ export class SuperAdminService {
         totalBookings: totalBookings || 184200,
       },
       recentBookings,
-      recentPartners: recentPartners.slice(0, 5),
-      recentCustomers: recentCustomers.slice(0, 5),
+      recentPartners: populatedPartners.slice(0, 5),
+      recentCustomers: populatedCustomers.slice(0, 5),
     };
   }
 
   // 2. CITY ADMIN MANAGEMENT
   async getAllCityAdmins() {
-    return await userRepository.find({ role: { $in: [ROLES.CITY_ADMIN, ROLES.ADMIN] } }, '-password', { createdAt: -1 });
+    const admins = await User.find({ role: { $in: [ROLES.CITY_ADMIN, ROLES.ADMIN] } }).select('-password').sort({ createdAt: -1 }).lean();
+    return await this.populateCityNames(admins);
   }
 
   async createCityAdmin(adminData, createdById) {
@@ -109,11 +140,13 @@ export class SuperAdminService {
 
   // 3. MASTER DIRECTORIES
   async getAllCustomers() {
-    return await userRepository.findByRole(ROLES.CUSTOMER);
+    const list = await userRepository.findByRole(ROLES.CUSTOMER);
+    return await this.populateCityNames(list);
   }
 
   async getAllPartners() {
-    return await userRepository.findByRole(ROLES.PARTNER);
+    const list = await userRepository.findByRole(ROLES.PARTNER);
+    return await this.populateCityNames(list);
   }
 
   async getAllBookings() {

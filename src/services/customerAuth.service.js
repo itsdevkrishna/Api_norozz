@@ -108,34 +108,40 @@ export class CustomerAuthService {
 
     if (!user) {
       isNewUser = true;
-      // Auto-create Customer account if new phone/email
       const cleanId = emailOrPhone.trim();
       const isEmail = cleanId.includes('@');
-      const generatedEmail = isEmail ? cleanId.toLowerCase() : `user_${cleanId.replace(/\D/g, '')}@norozz.com`;
-      const generatedPhone = !isEmail ? cleanId : '';
+      const cleanDigits = !isEmail ? cleanId.replace(/\D/g, '').slice(-6) : Math.floor(100000 + Math.random() * 900000);
+      const generatedUserId = `NRZ-C-${cleanDigits}`;
 
       user = await userRepository.create({
-        name: isEmail ? cleanId.split('@')[0] : `Customer ${cleanId.slice(-4)}`,
-        email: generatedEmail,
-        phone: generatedPhone,
+        userId: generatedUserId,
+        name: '',
+        email: isEmail ? cleanId.toLowerCase() : '',
+        phone: !isEmail ? cleanId : '',
         password: 'AutoOtpPassword123!',
         role: ROLES.CUSTOMER,
+        city: '',
         status: 'active',
         isEmailVerified: isEmail,
         isPhoneVerified: !isEmail,
         isProfileCompleted: false,
       });
     } else {
-      // Check if profile details are incomplete
-      const isPlaceholderName = !user.name || user.name.startsWith('Customer ') || user.name.startsWith('user_');
-      const isPlaceholderEmail = !user.email || (user.email.startsWith('user_') && user.email.endsWith('@norozz.com'));
+      if (!user.userId) {
+        const cleanDigits = user.phone ? user.phone.replace(/\D/g, '').slice(-6) : Math.floor(100000 + Math.random() * 900000);
+        user.userId = `NRZ-C-${cleanDigits}`;
+      }
+      if (user.name && (user.name.startsWith('Customer ') || user.name.startsWith('user_'))) user.name = '';
+      if (user.email && user.email.startsWith('user_') && user.email.endsWith('@norozz.com')) user.email = '';
+      if (user.city === 'Delhi NCR' && !user.isProfileCompleted) user.city = '';
+
+      const isPlaceholderName = !user.name;
+      const isPlaceholderEmail = !user.email;
       const isMissingPhone = !user.phone;
       const isMissingDob = !user.dob;
       const isMissingGender = !user.gender;
-      const isEmailUnverified = !user.isEmailVerified;
-      const isPhoneUnverified = !user.isPhoneVerified;
 
-      if (!user.isProfileCompleted || isPlaceholderName || isPlaceholderEmail || isMissingPhone || isMissingDob || isMissingGender || isEmailUnverified || isPhoneUnverified) {
+      if (!user.isProfileCompleted || isPlaceholderName || isPlaceholderEmail || isMissingPhone || isMissingDob || isMissingGender) {
         isNewUser = true;
       }
     }

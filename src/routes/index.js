@@ -16,6 +16,7 @@ import paymentRoutes from './payment.routes.js';
 import mediaRoutes from './media.routes.js';
 import chatRoutes from './chat.routes.js';
 import skillRoutes from './skill.routes.js';
+import cityRoutes from './city.routes.js';
 
 const router = Router();
 
@@ -36,5 +37,7 @@ router.use('/dispatch', autoAssignmentRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/media', mediaRoutes);
 router.use('/chat', chatRoutes);
+router.use('/cities', cityRoutes);
+router.use('/super-admin/cities', cityRoutes);
 
 export default router;

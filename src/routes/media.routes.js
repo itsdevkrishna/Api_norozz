@@ -15,7 +15,11 @@ router.get('/*', async (req, res) => {
     }
 
     // Decode URI component (e.g. spaces or special chars)
-    const key = decodeURIComponent(rawKey);
+    let key = decodeURIComponent(rawKey);
+    const bucketName = process.env.R2_BUCKET || 'advmenngo';
+    if (key.startsWith(`${bucketName}/`)) {
+      key = key.substring(bucketName.length + 1);
+    }
 
     const s3Object = await r2StorageService.getFileObject(key);
 

@@ -37,30 +37,25 @@ router.post('/kyc-submit', verifyJWT, partnerAuthController.submitKycSetup);
 
 // Step-wise Dedicated Partner Onboarding Endpoints
 router.post('/onboarding/location', verifyJWT, partnerAuthController.saveOnboardingLocation);
-router.post('/onboarding/documents', verifyJWT, onboardingDocumentsRules, validate, partnerAuthController.saveOnboardingDocuments);
+
+// Multi-file Upload for KYC Documents (Aadhaar, PAN, GST, Bank Passbook, Profile Image, Driving License, Photo)
+const kycDocUploadFields = upload.fields([
+  { name: 'aadhaarDoc', maxCount: 1 },
+  { name: 'aadhaarFront', maxCount: 1 },
+  { name: 'aadhaarBack', maxCount: 1 },
+  { name: 'panDoc', maxCount: 1 },
+  { name: 'gstDoc', maxCount: 1 },
+  { name: 'bankPassbookDoc', maxCount: 1 },
+  { name: 'passportPhoto', maxCount: 1 },
+  { name: 'drivingLicenseDoc', maxCount: 1 },
+  { name: 'profileImage', maxCount: 1 },
+]);
+
+router.post('/onboarding/documents', verifyJWT, kycDocUploadFields, partnerAuthController.saveOnboardingDocuments);
+router.post('/upload-documents', verifyJWT, kycDocUploadFields, partnerAuthController.uploadDocuments);
 router.post('/onboarding/category', verifyJWT, onboardingCategoryRules, validate, partnerAuthController.saveOnboardingCategory);
 router.post('/onboarding/skills', verifyJWT, onboardingSkillsRules, validate, partnerAuthController.saveOnboardingSkills);
 router.post('/onboarding/service-area', verifyJWT, onboardingServiceAreaRules, validate, partnerAuthController.saveOnboardingServiceArea);
 router.post('/onboarding/working-hours', verifyJWT, onboardingWorkingHoursRules, validate, partnerAuthController.saveOnboardingWorkingHours);
-
-
-
-// Multi-file Upload for KYC Documents (Aadhaar, PAN, GST, Bank Passbook, Profile Image, Driving License, Photo)
-router.post(
-  '/upload-documents',
-  verifyJWT,
-  upload.fields([
-    { name: 'aadhaarDoc', maxCount: 1 },
-    { name: 'aadhaarFront', maxCount: 1 },
-    { name: 'aadhaarBack', maxCount: 1 },
-    { name: 'panDoc', maxCount: 1 },
-    { name: 'gstDoc', maxCount: 1 },
-    { name: 'bankPassbookDoc', maxCount: 1 },
-    { name: 'passportPhoto', maxCount: 1 },
-    { name: 'drivingLicenseDoc', maxCount: 1 },
-    { name: 'profileImage', maxCount: 1 },
-  ]),
-  partnerAuthController.uploadDocuments
-);
 
 export default router;

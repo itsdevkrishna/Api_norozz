@@ -37,9 +37,13 @@ export class R2StorageService {
 
       await s3Client.send(command);
 
-      // Return public Media Proxy URL (or R2 Public Custom Domain if configured)
-      const baseMediaUrl = process.env.R2_PUBLIC_DOMAIN || `http://localhost:${process.env.PORT || 5000}/api/media`;
-      const publicUrl = `${baseMediaUrl}/${key}`;
+      // Return public Media Proxy URL (or R2 Public Custom Domain / r2.dev if configured)
+      let baseMediaUrl = process.env.R2_PUBLIC_DOMAIN;
+      if (!baseMediaUrl || baseMediaUrl.includes('r2.cloudflarestorage.com')) {
+        const host = process.env.SERVER_URL || `http://localhost:${process.env.PORT || 5000}`;
+        baseMediaUrl = `${host}/api/media`;
+      }
+      const publicUrl = `${baseMediaUrl.replace(/\/$/, '')}/${key}`;
 
       return {
         key,

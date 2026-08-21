@@ -1,3 +1,4 @@
+import { User } from '../models/user.model.js';
 import { userRepository } from '../repositories/user.repository.js';
 import { otpRepository } from '../repositories/otp.repository.js';
 import { storageService } from './storage.service.js';
@@ -6,6 +7,140 @@ import { notificationService } from './notificationService.js';
 import { ApiError } from '../utils/ApiError.js';
 import { HTTP_STATUS } from '../constants/httpStatus.js';
 import { ROLES } from '../constants/roles.constant.js';
+
+/**
+ * Helper function to determine partner onboarding progress status and next action step
+ */
+export const getPartnerOnboardingStatus = (user) => {
+  if (!user) {
+    return {
+      nextStep: 'VERIFY_OTP',
+      onboardingStatus: {
+        isPhoneVerified: false,
+        isProfileCompleted: false,
+        isLocationSaved: false,
+        isDocumentsUploaded: false,
+        isCategorySelected: false,
+        isSkillsUpdated: false,
+        isServiceAreaSet: false,
+        isWorkingHoursSet: false,
+        isAllCompleted: false,
+        kycStatus: 'pending',
+      },
+    };
+  }
+
+  // 1. Phone Verification Check
+  const isPhoneVerified = Boolean(user.isPhoneVerified);
+
+  // 2. Profile Creation Check (name, email, dob, gender)
+  const isPlaceholderEmail = !user.email || (user.email.startsWith('partner_') && user.email.endsWith('@norozz.com'));
+  const isPlaceholderName = !user.name || user.name.startsWith('Partner ');
+  const isMissingDob = !user.dob;
+  const isMissingGender = !user.gender;
+
+  const isProfileCompleted = Boolean(
+    user.isProfileCompleted &&
+    user.name && user.name.trim() !== '' && !isPlaceholderName &&
+    user.email && user.email.trim() !== '' && !isPlaceholderEmail &&
+    !isMissingDob && !isMissingGender
+  );
+
+  // 3. Location Upload Check (GPS coordinates or address & city)
+  const hasCoords = Boolean(user.locationCoordinates?.lat && user.locationCoordinates?.lng);
+  const hasCityOrAddress = Boolean((user.assignedCity || user.city) && user.address);
+  const isLocationSaved = Boolean(user.isLocationSaved || hasCoords || hasCityOrAddress);
+
+  // 4. Documents Upload Check (KYC docs: Aadhaar, PAN, Photo, DL, Bank Passbook)
+  const docs = user.documents || {};
+  const hasAadhaar = Boolean((docs.aadhaarFront && docs.aadhaarBack) || docs.aadhaarDoc);
+  const hasOtherKycDoc = Boolean(docs.panDoc || docs.passportPhoto || docs.drivingLicenseDoc || docs.bankPassbookDoc || user.profileImage);
+
+  const isDocumentsUploaded = Boolean(
+    user.isDocumentsUploaded ||
+    (hasAadhaar || hasOtherKycDoc)
+  );
+
+  // 5. Category Selection Check
+  const isCategorySelected = Boolean(
+    user.isCategorySelected ||
+    (user.categories && user.categories.length > 0) ||
+    (user.category && user.category.trim() !== '')
+  );
+
+  // 6. Skills & Experience Check
+  const isSkillsUpdated = Boolean(
+    user.isSkillsUpdated ||
+    (user.skills && user.skills.length > 0)
+  );
+
+  // 7. Service Area Check
+  const isServiceAreaSet = Boolean(
+    user.isServiceAreaSet ||
+    (user.localities && user.localities.length > 0)
+  );
+
+  // 8. Working Hours Check
+  const isWorkingHoursSet = Boolean(
+    user.isWorkingHoursSet
+  );
+
+  // Check if ALL 8 steps are TRUE
+  const isAllCompleted = Boolean(
+    isPhoneVerified &&
+    isProfileCompleted &&
+    isLocationSaved &&
+    isDocumentsUploaded &&
+    isCategorySelected &&
+    isSkillsUpdated &&
+    isServiceAreaSet &&
+    isWorkingHoursSet
+  );
+
+  const isKycSubmitted = Boolean(user.isKycSubmitted || isAllCompleted);
+  const kycStatus = user.kycStatus || 'pending';
+
+  // Compute next step strictly in requested order:
+  // VERIFY_OTP ➔ CREATE_PROFILE ➔ UPLOAD_LOCATION ➔ UPLOAD_DOCUMENTS ➔ SELECT_CATEGORY ➔ UPDATE_SKILLS_EXPERIENCE ➔ UPLOAD_SERVICE_AREA ➔ UPLOAD_WORKING_HOURS ➔ DONE
+  let nextStep = 'REQUEST_OTP';
+
+  if (!isPhoneVerified) {
+    nextStep = 'VERIFY_OTP';
+  } else if (!isProfileCompleted) {
+    nextStep = 'CREATE_PROFILE';
+  } else if (!isLocationSaved) {
+    nextStep = 'UPLOAD_LOCATION';
+  } else if (!isDocumentsUploaded) {
+    nextStep = 'UPLOAD_DOCUMENTS';
+  } else if (!isCategorySelected) {
+    nextStep = 'SELECT_CATEGORY';
+  } else if (!isSkillsUpdated) {
+    nextStep = 'UPDATE_SKILLS_EXPERIENCE';
+  } else if (!isServiceAreaSet) {
+    nextStep = 'UPLOAD_SERVICE_AREA';
+  } else if (!isWorkingHoursSet) {
+    nextStep = 'UPLOAD_WORKING_HOURS';
+  } else {
+    nextStep = 'DONE';
+  }
+
+  return {
+    nextStep,
+    onboardingStatus: {
+      isPhoneVerified,
+      isProfileCompleted,
+      isLocationSaved,
+      isDocumentsUploaded,
+      isCategorySelected,
+      isSkillsUpdated,
+      isServiceAreaSet,
+      isWorkingHoursSet,
+      isAllCompleted,
+      isKycSubmitted,
+      kycStatus,
+    },
+  };
+};
 
 export class PartnerAuthService {
   // 1a. REQUEST PARTNER OTP LOGIN
@@ -32,7 +167,18 @@ export class PartnerAuthService {
 
     await notificationService.dispatchOtp(cleanPhone, generatedOtp);
 
-    return { phone: cleanPhone, otp: generatedOtp, message: 'OTP sent successfully to mobile number' };
+    const statusInfo = getPartnerOnboardingStatus(existingUser);
+
+    return {
+      phone: cleanPhone,
+      otp: generatedOtp,
+      nextStep: 'VERIFY_OTP',
+      onboardingStatus: {
+        ...statusInfo.onboardingStatus,
+        isPhoneVerified: false,
+      },
+      message: 'OTP sent successfully to mobile number',
+    };
   }
 
   // 1b. VERIFY PARTNER OTP LOGIN
@@ -55,30 +201,71 @@ export class PartnerAuthService {
 
     if (!user) {
       isNewPartner = true;
-      const placeholderEmail = `partner_${cleanPhone.replace(/\D/g, '')}@norozz.com`;
+
+      // Generate unique Partner User ID (e.g. NRZ-P-872874)
+      const cleanPhoneDigits = cleanPhone.replace(/\D/g, '');
+      const lastDigits = cleanPhoneDigits.slice(-6);
+      const generatedUserId = `NRZ-P-${lastDigits}`;
 
       user = await userRepository.create({
-        name: `Partner ${cleanPhone.slice(-4)}`,
-        agencyName: `Technician Partner (${cleanPhone.slice(-4)})`,
-        email: placeholderEmail,
+        userId: generatedUserId,
+        name: '',
+        agencyName: '',
         phone: cleanPhone,
         password: 'AutoOtpPartnerPass123!',
         role: ROLES.PARTNER,
+        city: '',
+        assignedCity: '',
         status: 'active',
         kycStatus: 'pending',
         isEmailVerified: false,
         isPhoneVerified: true,
         isProfileCompleted: false,
+        isDocumentsUploaded: false,
+        isKycSubmitted: false,
       });
+    } else {
+      user.isPhoneVerified = true;
+
+      // Generate userId if missing
+      if (!user.userId) {
+        const cleanPhoneDigits = cleanPhone.replace(/\D/g, '');
+        user.userId = `NRZ-P-${cleanPhoneDigits.slice(-6)}`;
+      }
+
+      // Clear legacy dummy placeholder strings if present
+      if (user.name && user.name.startsWith('Partner ')) user.name = '';
+      if (user.email && user.email.startsWith('partner_') && user.email.endsWith('@norozz.com')) user.email = '';
+      if (user.agencyName && user.agencyName.startsWith('Technician Partner')) user.agencyName = '';
+      if (!user.isProfileCompleted) {
+        if (user.city === 'Delhi NCR') user.city = '';
+        if (user.assignedCity === 'Delhi NCR') user.assignedCity = '';
+      }
     }
 
-    const isPlaceholderEmail = !user.email || user.email.startsWith('partner_') && user.email.endsWith('@norozz.com');
+    // Evaluate profile and documents statuses
+    const isPlaceholderEmail = !user.email || (user.email.startsWith('partner_') && user.email.endsWith('@norozz.com'));
     const isPlaceholderName = !user.name || user.name.startsWith('Partner ');
+    const isMissingCity = !user.assignedCity && !user.city;
     const isMissingDob = !user.dob;
     const isMissingGender = !user.gender;
-    const isMissingCity = !user.assignedCity;
 
-    const isProfileCompleted = user.isProfileCompleted && !isPlaceholderEmail && !isPlaceholderName && !isMissingDob && !isMissingGender && !isMissingCity;
+    const isProfileCompleted = Boolean(
+      user.isProfileCompleted &&
+      user.name && user.name.trim() !== '' && !isPlaceholderName &&
+      user.email && user.email.trim() !== '' && !isPlaceholderEmail &&
+      !isMissingCity && !isMissingDob && !isMissingGender
+    );
+
+    const docs = user.documents || {};
+    const hasAadhaar = Boolean(docs.aadhaarDoc || docs.aadhaarFront);
+    const hasPan = Boolean(docs.panDoc);
+    const hasPhoto = Boolean(docs.passportPhoto || docs.profileImage || user.profileImage);
+    const isDocumentsUploaded = Boolean(user.isDocumentsUploaded || (hasAadhaar && (hasPan || hasPhoto)));
+
+    user.isProfileCompleted = isProfileCompleted;
+    user.isDocumentsUploaded = isDocumentsUploaded;
+    await user.save({ validateBeforeSave: false });
 
     if (!isProfileCompleted) {
       isNewPartner = true;
@@ -87,10 +274,15 @@ export class PartnerAuthService {
     await otpRepository.markAsVerified(validOtp._id);
 
     const authResult = await this.generateTokens(user);
+    const statusInfo = getPartnerOnboardingStatus(user);
+
     return {
       ...authResult,
       isNewPartner,
-      isProfileCompleted,
+      nextStep: statusInfo.nextStep,
+      onboardingStatus: statusInfo.onboardingStatus,
+      isProfileCompleted: statusInfo.onboardingStatus.isProfileCompleted,
+      isDocumentsUploaded: statusInfo.onboardingStatus.isDocumentsUploaded,
       kycStatus: user.kycStatus,
     };
   }
@@ -132,13 +324,28 @@ export class PartnerAuthService {
     sanitizedData.isProfileCompleted = true;
 
     const updated = await userRepository.updateById(partnerId, sanitizedData);
+    
+    // Check if documents exist to sync isDocumentsUploaded flag
+    const docs = updated.documents || {};
+    const hasAadhaar = Boolean(docs.aadhaarDoc || docs.aadhaarFront);
+    const hasPan = Boolean(docs.panDoc);
+    const hasPhoto = Boolean(docs.passportPhoto || docs.profileImage || updated.profileImage);
+    if (hasAadhaar && (hasPan || hasPhoto)) {
+      updated.isDocumentsUploaded = true;
+      await updated.save({ validateBeforeSave: false });
+    }
+
     const obj = updated.toObject();
     delete obj.password;
     delete obj.refreshToken;
 
+    const statusInfo = getPartnerOnboardingStatus(updated);
+
     return {
       message: 'Partner profile updated successfully',
       user: obj,
+      nextStep: statusInfo.nextStep,
+      onboardingStatus: statusInfo.onboardingStatus,
     };
   }
 
@@ -152,7 +359,12 @@ export class PartnerAuthService {
     user.lastLogin = new Date();
     await user.save({ validateBeforeSave: false });
 
-    const userObj = user.toObject();
+    // Populate categories & skills for populated user response
+    const populatedUser = await User.findById(user._id)
+      .populate('categories', 'name icon slug')
+      .populate('skills', 'name category');
+
+    const userObj = (populatedUser || user).toObject();
     delete userObj.password;
     delete userObj.refreshToken;
 
@@ -161,12 +373,14 @@ export class PartnerAuthService {
 
   // 1. PARTNER SIGNUP (Default status: PENDING KYC)
   async signup(partnerData) {
-    const existing = await userRepository.findByEmail(partnerData.email);
+    const existing = partnerData.email ? await userRepository.findByEmail(partnerData.email) : null;
     if (existing) {
       throw new ApiError(HTTP_STATUS.CONFLICT, 'Partner account with this email already exists');
     }
 
+    const cleanDigits = partnerData.phone ? partnerData.phone.replace(/\D/g, '').slice(-6) : Math.floor(100000 + Math.random() * 900000);
     const newPartner = await userRepository.create({
+      userId: `NRZ-P-${cleanDigits}`,
       ...partnerData,
       role: ROLES.PARTNER,
       kycStatus: 'pending', // Default status: Pending until City Admin approves
@@ -300,13 +514,27 @@ export class PartnerAuthService {
     }
 
     partner.documents = uploadedDocs;
+
+    const hasAadhaar = Boolean((uploadedDocs.aadhaarFront && uploadedDocs.aadhaarBack) || uploadedDocs.aadhaarDoc);
+    const hasOtherKycDoc = Boolean(uploadedDocs.panDoc || uploadedDocs.passportPhoto || uploadedDocs.drivingLicenseDoc || uploadedDocs.bankPassbookDoc || partner.profileImage);
+    partner.isDocumentsUploaded = Boolean(hasAadhaar || hasOtherKycDoc || Object.keys(files || {}).length > 0);
+
     await partner.save();
+
+    const obj = partner.toObject();
+    delete obj.password;
+    delete obj.refreshToken;
+
+    const statusInfo = getPartnerOnboardingStatus(partner);
 
     return {
       message: 'KYC documents uploaded successfully to Cloudflare R2 storage.',
       kycStatus: partner.kycStatus,
       documents: partner.documents,
       profileImage: partner.profileImage,
+      user: obj,
+      nextStep: statusInfo.nextStep,
+      onboardingStatus: statusInfo.onboardingStatus,
     };
   }
 
@@ -330,13 +558,22 @@ export class PartnerAuthService {
     }
     if (landmark) partner.landmark = landmark;
 
+    partner.isLocationSaved = true;
+
     await partner.save();
 
     const obj = partner.toObject();
     delete obj.password;
     delete obj.refreshToken;
 
-    return { message: 'Device location saved successfully', user: obj };
+    const statusInfo = getPartnerOnboardingStatus(partner);
+
+    return {
+      message: 'Device location saved successfully',
+      user: obj,
+      nextStep: statusInfo.nextStep,
+      onboardingStatus: statusInfo.onboardingStatus,
+    };
   }
 
   // 6. STEP-WISE ONBOARDING METHOD 1: DOCUMENTS UPLOAD
@@ -346,18 +583,30 @@ export class PartnerAuthService {
       throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Partner account not found');
     }
 
-    const currentDocs = partner.documents ? partner.documents.toObject() : {};
-    partner.documents = {
+    const currentDocs = partner.documents ? (partner.documents.toObject ? partner.documents.toObject() : partner.documents) : {};
+    const updatedDocs = {
       ...currentDocs,
       ...documentsData,
     };
+    partner.documents = updatedDocs;
+
+    const hasAadhaar = Boolean((updatedDocs.aadhaarFront && updatedDocs.aadhaarBack) || updatedDocs.aadhaarDoc);
+    const hasOtherKycDoc = Boolean(updatedDocs.panDoc || updatedDocs.passportPhoto || updatedDocs.drivingLicenseDoc || updatedDocs.bankPassbookDoc || partner.profileImage);
+    partner.isDocumentsUploaded = Boolean(hasAadhaar || hasOtherKycDoc || Object.keys(documentsData).length > 0);
 
     await partner.save();
     const obj = partner.toObject();
     delete obj.password;
     delete obj.refreshToken;
 
-    return { message: 'Documents saved successfully', user: obj };
+    const statusInfo = getPartnerOnboardingStatus(partner);
+
+    return {
+      message: 'Documents saved successfully',
+      user: obj,
+      nextStep: statusInfo.nextStep,
+      onboardingStatus: statusInfo.onboardingStatus,
+    };
   }
 
   // 6. STEP-WISE ONBOARDING METHOD 2: CATEGORY SELECTION (categories array of ObjectIds)
@@ -374,6 +623,7 @@ export class PartnerAuthService {
     if (categoriesArray.length > 0) {
       partner.category = String(categoriesArray[0]);
     }
+    partner.isCategorySelected = true;
 
     await partner.save();
 
@@ -381,7 +631,14 @@ export class PartnerAuthService {
     delete obj.password;
     delete obj.refreshToken;
 
-    return { message: 'Category IDs saved successfully', user: obj };
+    const statusInfo = getPartnerOnboardingStatus(partner);
+
+    return {
+      message: 'Category IDs saved successfully',
+      user: obj,
+      nextStep: statusInfo.nextStep,
+      onboardingStatus: statusInfo.onboardingStatus,
+    };
   }
 
   // 6. STEP-WISE ONBOARDING METHOD 3: SKILLS & EXPERIENCE
@@ -398,6 +655,7 @@ export class PartnerAuthService {
       );
     }
     if (Array.isArray(certifications)) partner.certifications = certifications;
+    partner.isSkillsUpdated = true;
 
     await partner.save();
 
@@ -405,7 +663,14 @@ export class PartnerAuthService {
     delete obj.password;
     delete obj.refreshToken;
 
-    return { message: 'Skills & Experience saved successfully', user: obj };
+    const statusInfo = getPartnerOnboardingStatus(partner);
+
+    return {
+      message: 'Skills & Experience saved successfully',
+      user: obj,
+      nextStep: statusInfo.nextStep,
+      onboardingStatus: statusInfo.onboardingStatus,
+    };
   }
 
   // 6. STEP-WISE ONBOARDING METHOD 4: SERVICE AREA
@@ -417,6 +682,7 @@ export class PartnerAuthService {
 
     if (workRadius) partner.workRadius = Number(workRadius);
     if (Array.isArray(localities)) partner.localities = localities;
+    partner.isServiceAreaSet = true;
 
     await partner.save();
 
@@ -424,7 +690,14 @@ export class PartnerAuthService {
     delete obj.password;
     delete obj.refreshToken;
 
-    return { message: 'Service area saved successfully', user: obj };
+    const statusInfo = getPartnerOnboardingStatus(partner);
+
+    return {
+      message: 'Service area saved successfully',
+      user: obj,
+      nextStep: statusInfo.nextStep,
+      onboardingStatus: statusInfo.onboardingStatus,
+    };
   }
 
   // 6. STEP-WISE ONBOARDING METHOD 5: WORKING HOURS & FINAL COMPLETE
@@ -435,8 +708,10 @@ export class PartnerAuthService {
     }
 
     if (Array.isArray(workingHours)) partner.workingHours = workingHours;
+    partner.isWorkingHoursSet = true;
     partner.isKycSubmitted = true;
     partner.kycStatus = 'pending'; // Application submitted for City Admin approval
+    partner.isDocumentsUploaded = true;
 
     await partner.save();
 
@@ -444,7 +719,14 @@ export class PartnerAuthService {
     delete obj.password;
     delete obj.refreshToken;
 
-    return { message: 'Working hours saved & onboarding completed successfully', user: obj };
+    const statusInfo = getPartnerOnboardingStatus(partner);
+
+    return {
+      message: 'Working hours saved & onboarding completed successfully',
+      user: obj,
+      nextStep: statusInfo.nextStep,
+      onboardingStatus: statusInfo.onboardingStatus,
+    };
   }
 
   // 7. SUBMIT FULL KYC & WORK SETUP (BULK FALLBACK)
@@ -481,6 +763,7 @@ export class PartnerAuthService {
 
     partner.isKycSubmitted = true;
     partner.kycStatus = 'pending';
+    partner.isDocumentsUploaded = true;
 
     await partner.save();
 
@@ -488,11 +771,15 @@ export class PartnerAuthService {
     delete obj.password;
     delete obj.refreshToken;
 
+    const statusInfo = getPartnerOnboardingStatus(partner);
+
     return {
       message: 'KYC & Work setup submitted successfully. Application is under review by City Admin.',
       user: obj,
       kycStatus: partner.kycStatus,
       isKycSubmitted: partner.isKycSubmitted,
+      nextStep: statusInfo.nextStep,
+      onboardingStatus: statusInfo.onboardingStatus,
     };
   }
 
@@ -504,13 +791,19 @@ export class PartnerAuthService {
       throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Partner account not found');
     }
 
+    const statusInfo = getPartnerOnboardingStatus(partner);
+
     return {
       partnerId: partner._id,
       agencyName: partner.agencyName,
       name: partner.name,
       kycStatus: partner.kycStatus,
       isKycSubmitted: partner.isKycSubmitted || false,
+      isProfileCompleted: statusInfo.onboardingStatus.isProfileCompleted,
+      isDocumentsUploaded: statusInfo.onboardingStatus.isDocumentsUploaded,
       isBookingUnlocked: partner.kycStatus === 'approved',
+      nextStep: statusInfo.nextStep,
+      onboardingStatus: statusInfo.onboardingStatus,
       documents: partner.documents,
       experience: partner.experience,
       skills: partner.skills,
