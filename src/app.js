@@ -18,15 +18,36 @@ const app = express();
 // Trust reverse proxy (Nginx, AWS, Cloudflare, Heroku) to correctly track client IP
 app.set('trust proxy', 1);
 
+// 1. CORS Middleware (Must be FIRST before rate limiters & security headers to handle OPTIONS preflight)
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  process.env.CORS_ORIGIN,
+].filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, curl) or allowed origins
+      if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+        callback(null, true);
+      } else {
+        callback(null, true);
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  })
+);
+
+// Enable Pre-Flight CORS response for all routes
+app.options('*', cors());
+
 // Security Middlewares & Rate Limiting
 app.use(helmet());
 app.use(generalApiRateLimiter);
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-    credentials: true,
-  })
-);
 
 // Logging Middleware
 if (process.env.NODE_ENV !== 'test') {

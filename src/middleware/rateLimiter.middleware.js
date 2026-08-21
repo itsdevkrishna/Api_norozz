@@ -43,13 +43,13 @@ export const otpAuthRateLimiter = rateLimit({
  */
 export const generalApiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes window
-  max: 100, // Limit each client IP to 100 requests per 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 500 : 2000, // Allow high request limit in dev mode
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => getClientIp(req),
   message: {
     statusCode: 429,
     success: false,
-    message: 'Too many requests from this device. Please try again after 15 minutes.',
+    message: 'Too many requests from this device. Please wait a moment before trying again.',
   },
 });
