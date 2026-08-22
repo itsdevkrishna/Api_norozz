@@ -45,6 +45,11 @@ export class PartnerDashboardController extends BaseController {
     return this.sendSuccess(res, bookings, 'Cancelled bookings retrieved successfully');
   });
 
+  getAllBookings = asyncHandler(async (req, res) => {
+    const bookings = await partnerDashboardService.getAllBookings(req.user);
+    return this.sendSuccess(res, bookings, 'All partner bookings retrieved successfully');
+  });
+
   getWallet = asyncHandler(async (req, res) => {
     const wallet = await partnerDashboardService.getWallet(req.user);
     return this.sendSuccess(res, wallet, 'Partner wallet balance retrieved successfully');

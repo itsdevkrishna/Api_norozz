@@ -20,7 +20,22 @@ export class UserRepository extends BaseRepository {
   async findByPhone(phone, selectWithPassword = false) {
     if (!phone) return null;
     const clean = phone.trim();
-    const query = this.model.findOne({ phone: clean });
+    const digits = clean.replace(/\D/g, '');
+    const isPhone = digits.length >= 7;
+    const base10 = digits.length >= 10 ? digits.slice(-10) : digits;
+
+    const searchConditions = [{ phone: clean }];
+    if (isPhone) {
+      searchConditions.push(
+        { phone: base10 },
+        { phone: `+91${base10}` },
+        { phone: `91${base10}` },
+        { phone: `0${base10}` },
+        { phone: new RegExp(`${base10}$`) }
+      );
+    }
+
+    const query = this.model.findOne({ $or: searchConditions });
     if (selectWithPassword) {
       query.select('+password');
     }
@@ -30,12 +45,26 @@ export class UserRepository extends BaseRepository {
   async findByEmailOrPhone(identifier, selectWithPassword = false) {
     if (!identifier) return null;
     const clean = identifier.trim();
-    const query = this.model.findOne({
-      $or: [
-        { email: clean.toLowerCase() },
-        { phone: clean }
-      ]
-    });
+    const digits = clean.replace(/\D/g, '');
+    const isPhone = digits.length >= 7;
+    const base10 = digits.length >= 10 ? digits.slice(-10) : digits;
+
+    const orConditions = [
+      { email: clean.toLowerCase() },
+      { phone: clean }
+    ];
+
+    if (isPhone) {
+      orConditions.push(
+        { phone: base10 },
+        { phone: `+91${base10}` },
+        { phone: `91${base10}` },
+        { phone: `0${base10}` },
+        { phone: new RegExp(`${base10}$`) }
+      );
+    }
+
+    const query = this.model.findOne({ $or: orConditions });
     if (selectWithPassword) {
       query.select('+password');
     }

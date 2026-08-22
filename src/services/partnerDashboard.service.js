@@ -119,6 +119,18 @@ export class PartnerDashboardService {
       .sort({ createdAt: -1 });
   }
 
+  async getAllBookings(partner) {
+    this.checkKycApproved(partner);
+    return await bookingRepository.model
+      .find({
+        partner: partner._id,
+      })
+      .populate('category', 'name slug image')
+      .populate('service', 'name slug price finalPrice duration')
+      .populate('customer', 'name email phone')
+      .sort({ createdAt: -1 });
+  }
+
   // 3. WALLET & EARNINGS
   async getWallet(partner) {
     return {

@@ -23,6 +23,7 @@ router.get('/bookings/today', partnerDashboardController.getTodayBookings);
 router.get('/bookings/pending', partnerDashboardController.getPendingBookings);
 router.get('/bookings/completed', partnerDashboardController.getCompletedBookings);
 router.get('/bookings/cancelled', partnerDashboardController.getCancelledBookings);
+router.get('/bookings/all', partnerDashboardController.getAllBookings);
 router.post('/bookings/:id/accept-job', partnerDashboardController.claimJobOffer);
 router.post('/bookings/:id/verify-otp', partnerDashboardController.verifyOtp);
 router.post('/bookings/:id/add-extra-service', partnerDashboardController.addExtraService);

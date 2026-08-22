@@ -38,6 +38,42 @@ async function seed() {
     }
 
 
+    // 2. City Admins Seeding
+    const cityAdmins = [
+      { name: 'Delhi City Operations Manager', email: 'delhi.admin@norozz.com', city: 'Delhi NCR', assignedCity: 'Delhi NCR' },
+      { name: 'Bengaluru City Operations Manager', email: 'bengaluru.admin@norozz.com', city: 'Bengaluru', assignedCity: 'Bengaluru' },
+      { name: 'Mumbai City Operations Manager', email: 'mumbai.admin@norozz.com', city: 'Mumbai', assignedCity: 'Mumbai' },
+      { name: 'Hyderabad City Operations Manager', email: 'hyderabad.admin@norozz.com', city: 'Hyderabad', assignedCity: 'Hyderabad' },
+      { name: 'Pune City Operations Manager', email: 'pune.admin@norozz.com', city: 'Pune', assignedCity: 'Pune' },
+      { name: 'Jaipur City Operations Manager', email: 'jaipur.admin@norozz.com', city: 'Jaipur', assignedCity: 'Jaipur' },
+    ];
+
+    for (const adminData of cityAdmins) {
+      let cityAdminUser = await User.findOne({ email: adminData.email });
+      if (!cityAdminUser) {
+        await User.create({
+          name: adminData.name,
+          email: adminData.email,
+          password: 'CityAdminPass123!',
+          role: ROLES.CITY_ADMIN,
+          city: adminData.city,
+          assignedCity: adminData.assignedCity,
+          status: 'active',
+          isEmailVerified: true,
+          isPhoneVerified: true,
+        });
+        console.log(`✅ City Admin created: ${adminData.email} / CityAdminPass123! (${adminData.assignedCity})`);
+      } else {
+        cityAdminUser.password = 'CityAdminPass123!';
+        cityAdminUser.role = ROLES.CITY_ADMIN;
+        cityAdminUser.assignedCity = adminData.assignedCity;
+        cityAdminUser.city = adminData.city;
+        cityAdminUser.status = 'active';
+        await cityAdminUser.save();
+        console.log(`✅ City Admin updated: ${adminData.email} / CityAdminPass123! (${adminData.assignedCity})`);
+      }
+    }
+
     console.log('🎉 Seeding completed successfully!');
     process.exit(0);
   } catch (error) {
