@@ -95,7 +95,7 @@ export const getPartnerOnboardingStatus = (user) => {
     isWorkingHoursSet
   );
 
-  const isKycSubmitted = Boolean(user.isKycSubmitted || isAllCompleted);
+  const isKycSubmitted = Boolean(user.isKycSubmitted || isDocumentsUploaded || isAllCompleted);
   const kycStatus = user.kycStatus || 'pending';
 
   // Compute next step strictly in requested order:
@@ -503,6 +503,12 @@ export class PartnerAuthService {
     const hasAadhaar = Boolean((uploadedDocs.aadhaarFront && uploadedDocs.aadhaarBack) || uploadedDocs.aadhaarDoc);
     const hasOtherKycDoc = Boolean(uploadedDocs.panDoc || uploadedDocs.passportPhoto || uploadedDocs.drivingLicenseDoc || uploadedDocs.bankPassbookDoc || partner.profileImage);
     partner.isDocumentsUploaded = Boolean(hasAadhaar || hasOtherKycDoc || Object.keys(files || {}).length > 0);
+    if (partner.isDocumentsUploaded || Object.keys(files || {}).length > 0) {
+      partner.isKycSubmitted = true;
+      if (!partner.kycStatus || partner.kycStatus === 'rejected') {
+        partner.kycStatus = 'pending';
+      }
+    }
 
     await partner.save();
 
@@ -578,6 +584,12 @@ export class PartnerAuthService {
     const hasAadhaar = Boolean((updatedDocs.aadhaarFront && updatedDocs.aadhaarBack) || updatedDocs.aadhaarDoc);
     const hasOtherKycDoc = Boolean(updatedDocs.panDoc || updatedDocs.passportPhoto || updatedDocs.drivingLicenseDoc || updatedDocs.bankPassbookDoc || partner.profileImage);
     partner.isDocumentsUploaded = Boolean(hasAadhaar || hasOtherKycDoc || Object.keys(documentsData).length > 0);
+    if (partner.isDocumentsUploaded || Object.keys(documentsData).length > 0) {
+      partner.isKycSubmitted = true;
+      if (!partner.kycStatus || partner.kycStatus === 'rejected') {
+        partner.kycStatus = 'pending';
+      }
+    }
 
     await partner.save();
     const obj = partner.toObject();
@@ -776,19 +788,36 @@ export class PartnerAuthService {
       throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Partner account not found');
     }
 
+    const isApproved = partner.kycStatus === 'approved';
     const statusInfo = getPartnerOnboardingStatus(partner);
+
+    const onboardingStatus = isApproved
+      ? {
+          isPhoneVerified: true,
+          isProfileCompleted: true,
+          isLocationSaved: true,
+          isDocumentsUploaded: true,
+          isCategorySelected: true,
+          isSkillsUpdated: true,
+          isServiceAreaSet: true,
+          isWorkingHoursSet: true,
+          isAllCompleted: true,
+          isKycSubmitted: true,
+          kycStatus: 'approved',
+        }
+      : statusInfo.onboardingStatus;
 
     return {
       partnerId: partner._id,
       agencyName: partner.agencyName,
       name: partner.name,
       kycStatus: partner.kycStatus,
-      isKycSubmitted: partner.isKycSubmitted || false,
-      isProfileCompleted: statusInfo.onboardingStatus.isProfileCompleted,
-      isDocumentsUploaded: statusInfo.onboardingStatus.isDocumentsUploaded,
-      isBookingUnlocked: partner.kycStatus === 'approved',
-      nextStep: statusInfo.nextStep,
-      onboardingStatus: statusInfo.onboardingStatus,
+      isKycSubmitted: isApproved || partner.isKycSubmitted || statusInfo.onboardingStatus.isDocumentsUploaded || false,
+      isProfileCompleted: isApproved || statusInfo.onboardingStatus.isProfileCompleted,
+      isDocumentsUploaded: isApproved || statusInfo.onboardingStatus.isDocumentsUploaded,
+      isBookingUnlocked: isApproved,
+      nextStep: isApproved ? 'DONE' : statusInfo.nextStep,
+      onboardingStatus,
       documents: partner.documents,
       experience: partner.experience,
       skills: partner.skills,

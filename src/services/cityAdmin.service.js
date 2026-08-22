@@ -56,6 +56,16 @@ export class CityAdminService {
 
     partner.kycStatus = 'approved';
     partner.status = 'active';
+    partner.isKycSubmitted = true;
+    partner.isDocumentsUploaded = true;
+    partner.isPhoneVerified = true;
+    partner.isEmailVerified = true;
+    partner.isProfileCompleted = true;
+    partner.isLocationSaved = true;
+    partner.isCategorySelected = true;
+    partner.isSkillsUpdated = true;
+    partner.isServiceAreaSet = true;
+    partner.isWorkingHoursSet = true;
     await partner.save();
 
     return { message: `Partner '${partner.name}' (${partner.agencyName}) approved successfully`, partner };
@@ -83,6 +93,14 @@ export class CityAdminService {
     partner.isPhoneVerified = true;
     partner.kycStatus = 'approved';
     partner.status = 'active';
+    partner.isKycSubmitted = true;
+    partner.isDocumentsUploaded = true;
+    partner.isProfileCompleted = true;
+    partner.isLocationSaved = true;
+    partner.isCategorySelected = true;
+    partner.isSkillsUpdated = true;
+    partner.isServiceAreaSet = true;
+    partner.isWorkingHoursSet = true;
     await partner.save();
 
     return { message: `Partner '${partner.name}' documents verified and activated`, partner };
