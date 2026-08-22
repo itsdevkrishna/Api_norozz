@@ -127,8 +127,34 @@ export class PartnerDashboardService {
       })
       .populate('category', 'name slug image')
       .populate('service', 'name slug price finalPrice duration')
-      .populate('customer', 'name email phone')
+      .populate('customer', 'name email phone rating createdAt')
       .sort({ createdAt: -1 });
+  }
+
+  async getBookingDetails(partner, bookingId) {
+    this.checkKycApproved(partner);
+    const booking = await bookingRepository.model
+      .findOne({ _id: bookingId, partner: partner._id })
+      .populate('category', 'name slug image')
+      .populate('service', 'name slug price finalPrice duration description')
+      .populate('customer', 'name email phone rating createdAt')
+      .populate('partner', 'name agencyName phone profileImage rating city');
+
+    if (!booking) {
+      throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Booking not found or not assigned to this partner');
+    }
+
+    // Fetch customer's last 3 service history items
+    const customerHistory = await bookingRepository.model
+      .find({ customer: booking.customer._id })
+      .sort({ createdAt: -1 })
+      .limit(3)
+      .select('bookingNumber packageName serviceName totalAmount amount status createdAt');
+
+    const bookingObj = booking.toObject();
+    bookingObj.customerHistory = customerHistory;
+
+    return bookingObj;
   }
 
   // 3. WALLET & EARNINGS
