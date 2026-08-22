@@ -33,17 +33,14 @@ export const getPartnerOnboardingStatus = (user) => {
   // 1. Phone Verification Check
   const isPhoneVerified = Boolean(user.isPhoneVerified);
 
-  // 2. Profile Creation Check (name, email, dob, gender)
+  // 2. Profile Creation Check (name & email)
   const isPlaceholderEmail = !user.email || (user.email.startsWith('partner_') && user.email.endsWith('@norozz.com'));
   const isPlaceholderName = !user.name || user.name.startsWith('Partner ');
-  const isMissingDob = !user.dob;
-  const isMissingGender = !user.gender;
 
   const isProfileCompleted = Boolean(
-    user.isProfileCompleted &&
-    user.name && user.name.trim() !== '' && !isPlaceholderName &&
-    user.email && user.email.trim() !== '' && !isPlaceholderEmail &&
-    !isMissingDob && !isMissingGender
+    user.isProfileCompleted ||
+    (user.name && user.name.trim() !== '' && !isPlaceholderName &&
+     user.email && user.email.trim() !== '' && !isPlaceholderEmail)
   );
 
   // 3. Location Upload Check (GPS coordinates or address & city)
@@ -82,7 +79,8 @@ export const getPartnerOnboardingStatus = (user) => {
 
   // 8. Working Hours Check
   const isWorkingHoursSet = Boolean(
-    user.isWorkingHoursSet
+    user.isWorkingHoursSet ||
+    (user.workingHours && user.workingHours.length > 0)
   );
 
   // Check if ALL 8 steps are TRUE
@@ -173,10 +171,7 @@ export class PartnerAuthService {
       phone: cleanPhone,
       otp: generatedOtp,
       nextStep: 'VERIFY_OTP',
-      onboardingStatus: {
-        ...statusInfo.onboardingStatus,
-        isPhoneVerified: false,
-      },
+      onboardingStatus: statusInfo.onboardingStatus,
       message: 'OTP sent successfully to mobile number',
     };
   }
@@ -221,7 +216,12 @@ export class PartnerAuthService {
         isEmailVerified: false,
         isPhoneVerified: true,
         isProfileCompleted: false,
+        isLocationSaved: false,
         isDocumentsUploaded: false,
+        isCategorySelected: false,
+        isSkillsUpdated: false,
+        isServiceAreaSet: false,
+        isWorkingHoursSet: false,
         isKycSubmitted: false,
       });
     } else {
@@ -232,57 +232,42 @@ export class PartnerAuthService {
         const cleanPhoneDigits = cleanPhone.replace(/\D/g, '');
         user.userId = `NRZ-P-${cleanPhoneDigits.slice(-6)}`;
       }
-
-      // Clear legacy dummy placeholder strings if present
-      if (user.name && user.name.startsWith('Partner ')) user.name = '';
-      if (user.email && user.email.startsWith('partner_') && user.email.endsWith('@norozz.com')) user.email = '';
-      if (user.agencyName && user.agencyName.startsWith('Technician Partner')) user.agencyName = '';
-      if (!user.isProfileCompleted) {
-        if (user.city === 'Delhi NCR') user.city = '';
-        if (user.assignedCity === 'Delhi NCR') user.assignedCity = '';
-      }
     }
 
-    // Evaluate profile and documents statuses
-    const isPlaceholderEmail = !user.email || (user.email.startsWith('partner_') && user.email.endsWith('@norozz.com'));
-    const isPlaceholderName = !user.name || user.name.startsWith('Partner ');
-    const isMissingCity = !user.assignedCity && !user.city;
-    const isMissingDob = !user.dob;
-    const isMissingGender = !user.gender;
+    // Compute updated status flags based on user's actual data in DB without resetting existing completed flags
+    const statusInfo = getPartnerOnboardingStatus(user);
 
-    const isProfileCompleted = Boolean(
-      user.isProfileCompleted &&
-      user.name && user.name.trim() !== '' && !isPlaceholderName &&
-      user.email && user.email.trim() !== '' && !isPlaceholderEmail &&
-      !isMissingCity && !isMissingDob && !isMissingGender
-    );
+    user.isPhoneVerified = statusInfo.onboardingStatus.isPhoneVerified;
+    user.isProfileCompleted = statusInfo.onboardingStatus.isProfileCompleted;
+    user.isLocationSaved = statusInfo.onboardingStatus.isLocationSaved;
+    user.isDocumentsUploaded = statusInfo.onboardingStatus.isDocumentsUploaded;
+    user.isCategorySelected = statusInfo.onboardingStatus.isCategorySelected;
+    user.isSkillsUpdated = statusInfo.onboardingStatus.isSkillsUpdated;
+    user.isServiceAreaSet = statusInfo.onboardingStatus.isServiceAreaSet;
+    user.isWorkingHoursSet = statusInfo.onboardingStatus.isWorkingHoursSet;
 
-    const docs = user.documents || {};
-    const hasAadhaar = Boolean(docs.aadhaarDoc || docs.aadhaarFront);
-    const hasPan = Boolean(docs.panDoc);
-    const hasPhoto = Boolean(docs.passportPhoto || docs.profileImage || user.profileImage);
-    const isDocumentsUploaded = Boolean(user.isDocumentsUploaded || (hasAadhaar && (hasPan || hasPhoto)));
+    if (statusInfo.onboardingStatus.isAllCompleted) {
+      user.isKycSubmitted = true;
+    }
 
-    user.isProfileCompleted = isProfileCompleted;
-    user.isDocumentsUploaded = isDocumentsUploaded;
     await user.save({ validateBeforeSave: false });
-
-    if (!isProfileCompleted) {
-      isNewPartner = true;
-    }
 
     await otpRepository.markAsVerified(validOtp._id);
 
     const authResult = await this.generateTokens(user);
-    const statusInfo = getPartnerOnboardingStatus(user);
+
+    // Re-eval status after save to ensure fresh statusInfo
+    const finalStatusInfo = getPartnerOnboardingStatus(user);
+
+    isNewPartner = !finalStatusInfo.onboardingStatus.isAllCompleted;
 
     return {
       ...authResult,
       isNewPartner,
-      nextStep: statusInfo.nextStep,
-      onboardingStatus: statusInfo.onboardingStatus,
-      isProfileCompleted: statusInfo.onboardingStatus.isProfileCompleted,
-      isDocumentsUploaded: statusInfo.onboardingStatus.isDocumentsUploaded,
+      nextStep: finalStatusInfo.nextStep,
+      onboardingStatus: finalStatusInfo.onboardingStatus,
+      isProfileCompleted: finalStatusInfo.onboardingStatus.isProfileCompleted,
+      isDocumentsUploaded: finalStatusInfo.onboardingStatus.isDocumentsUploaded,
       kycStatus: user.kycStatus,
     };
   }

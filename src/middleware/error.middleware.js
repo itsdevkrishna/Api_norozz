@@ -21,5 +21,12 @@ export const errorHandler = (err, req, res, next) => {
     ...(process.env.NODE_ENV === 'development' ? { stack: error.stack } : {}),
   };
 
+  // Ensure CORS header is attached even on unhandled error responses
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+
   return res.status(error.statusCode).json(response);
 };

@@ -23,6 +23,9 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:3000',
+  'https://norozz.in',
+  'https://www.norozz.in',
+  'https://api.norozz.in',
   process.env.CORS_ORIGIN,
 ].filter(Boolean);
 
@@ -39,6 +42,7 @@ app.use(
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    maxAge: 86400, // Cache preflight OPTIONS responses for 24 hours
   })
 );
 
